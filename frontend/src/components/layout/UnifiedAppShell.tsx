@@ -182,7 +182,7 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
                 <span>AI Assistant</span>
               </button>
               <a
-                href="https://github.com"
+                href="https://github.com/Charan18-rgb/ResolveX"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:text-white"
@@ -538,7 +538,7 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
             {/* Right Controls: Role Switcher, Notifications, Shared AI Assistant */}
             <div className="flex items-center gap-2 sm:gap-3">
               <select
-                aria-label="Active demo role"
+                aria-label="Active role"
                 value={activeRole}
                 onChange={(e) => setActiveRole(e.target.value as UserDemoRole)}
                 className="hidden sm:block rounded-xl border border-white/12 bg-[#0a0f1f] px-2.5 py-1.5 text-xs font-medium text-slate-200 focus:border-cyan-400/60 focus:outline-none"

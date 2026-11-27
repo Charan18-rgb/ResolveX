@@ -227,7 +227,7 @@ function InventoryHubPage() {
       <SectionHeader
         eyebrow="Inventory & Operations Hub"
         title="Materials, CRD Risk & Procurement Hub"
-        description="Authoritative SQLite inventory availability (on_hand + incoming - allocated), Earliest-CRD-First allocation, CRD risk assessment, proactive alerts, and HITL PO approvals."
+        description="Live inventory availability (on-hand + incoming − allocated), earliest-CRD-first allocation, delivery-risk assessment, proactive alerts, and approval-gated purchase orders."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -373,7 +373,7 @@ function InventoryHubPage() {
           ) : (
             <p className="text-xs text-slate-300">
               {backendBriefing.ai_note ??
-                `Loaded ${backendBriefing.sections.length} verified briefing sections from SQLite.`}
+                `Loaded ${backendBriefing.sections.length} verified briefing sections from the inventory database.`}
             </p>
           )}
         </Card>
@@ -460,7 +460,7 @@ function InventoryHubPage() {
       {isLoadingInventory && materials.length === 0 && (
         <Card className="flex items-center justify-center gap-2 py-12 text-sm text-cyan-300">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading deterministic inventory state from SQLite backend...</span>
+          <span>Loading inventory data...</span>
         </Card>
       )}
 
@@ -473,7 +473,7 @@ function InventoryHubPage() {
                 Material Stock &amp; Net Availability Matrix
               </h3>
               <p className="text-xs text-slate-400">
-                Formula: Net Availability = On-Hand + Incoming − Allocated (SQLite authoritative)
+                Formula: Net Availability = On-Hand + Incoming − Allocated
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -511,7 +511,7 @@ function InventoryHubPage() {
                 {filteredMaterials.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-xs text-slate-400">
-                      No materials match the current filter or backend returned empty inventory.
+                      No materials match the current filter, or the inventory service returned no data.
                     </td>
                   </tr>
                 ) : (
@@ -577,7 +577,7 @@ function InventoryHubPage() {
 
           {backendOrderRisks.length === 0 ? (
             <Card className="py-8 text-center text-xs text-slate-400">
-              No open orders returned by backend.
+              No open orders found.
             </Card>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -725,14 +725,13 @@ function InventoryHubPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-semibold text-white">
-                  Live Inventory Event Stream Tester (Idempotency &amp; Quarantine)
+                  Inventory Event Tester (Duplicate &amp; Invalid Event Handling)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Test real-time `POST /api/inventory/events`, duplicate event suppression, and
-                  malformed payload quarantine (`FEED_FAILURE` alert).
+                  Simulate stock receipts, duplicate events, and invalid payloads to verify idempotent processing and quarantine handling.
                 </p>
               </div>
-              <Badge tone="cyan">POST /api/inventory/events</Badge>
+              <Badge tone="cyan">Live Event Feed</Badge>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -774,8 +773,7 @@ function InventoryHubPage() {
                   Purchase Order Proposals (Human-in-the-Loop Gate)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Only <strong>Procurement Manager</strong> can approve or reject. Switch demo role
-                  above to test backend <code>403 FORBIDDEN</code> enforcement.
+                  Only <strong>Procurement Manager</strong> or <strong>Admin</strong> can approve or reject. Switch the role selector above to verify permission enforcement.
                 </p>
               </div>
               <Button

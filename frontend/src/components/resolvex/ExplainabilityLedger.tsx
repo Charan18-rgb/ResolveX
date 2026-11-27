@@ -9,6 +9,13 @@ interface ExplainabilityLedgerProps {
   isVerifiedResolved?: boolean | undefined;
 }
 
+const ANALYSIS_SOURCE_LABELS: Record<string, string> = {
+  gemini: "AI Language Engine (Live)",
+  local: "Deterministic Rules Engine",
+  offline_fallback: "Offline Fallback",
+  system: "System Resolution",
+};
+
 export function ExplainabilityLedger({
   analysis,
   finalResolution,
@@ -20,38 +27,55 @@ export function ExplainabilityLedger({
   const isResolved = isVerifiedResolved ?? backend?.status === "RESOLVED";
   const isUnitConversion = intent?.action === "unit_conversion";
   const isUnsupported = intent?.action === "unsupported_request";
+  const hasVerifiedAnswer = Boolean(inv) || isUnitConversion || isUnsupported;
 
-  // 1. Data Sources Used
+  // 1. Data Sources Used — derived from the actual backend provenance field.
   const dataSources: string[] = [];
-  if (inv) dataSources.push("SQLite Inventory & Order DB");
-  if (isUnitConversion || isUnsupported) dataSources.push("Deterministic Rule Engine");
-  if (backend && !isUnitConversion && !isUnsupported) {
-    dataSources.push("Gemini Structured Analyzer");
+  if (inv) dataSources.push("Inventory Database");
+  if (backend?.analysis_source) {
+    dataSources.push(
+      ANALYSIS_SOURCE_LABELS[backend.analysis_source] ?? "Analysis Engine",
+    );
+  } else if (backend && !isUnitConversion && !isUnsupported) {
+    dataSources.push("Analysis Engine");
   }
   if (!backend) dataSources.push("Client Preview Model");
-  if ((backend?.turn_count ?? 1) > 1) dataSources.push("Multi-Turn Clarification History");
+  if ((backend?.turn_count ?? 1) > 1) dataSources.push("Conversation History");
 
-  // 2. Verified Facts
+  // 2. Verified Facts — only statements backed by returned data.
   const verifiedFacts: string[] = [];
   if (inv) {
     const atRiskCount = inv.order_risks.filter((r) => r.risk_category !== "ON_TRACK").length;
     verifiedFacts.push(
-      `Evaluated ${inv.inventory_overview.total_materials} materials (${inv.inventory_overview.out_of_stock_count} out of stock, ${inv.inventory_overview.low_stock_count} low stock) using Net Availability = on_hand + incoming - allocated.`,
+      `Evaluated ${inv.inventory_overview.total_materials} materials (${inv.inventory_overview.out_of_stock_count} out of stock, ${inv.inventory_overview.low_stock_count} low stock). Net availability = on-hand + incoming − allocated.`,
     );
     verifiedFacts.push(
-      `Assessed ${inv.order_risks.length} open order(s) using Earliest-CRD-First allocation; ${atRiskCount} order(s) flagged AT_RISK or BLOCKED.`,
+      `Assessed ${inv.order_risks.length} open order(s) with earliest-CRD-first allocation; ${atRiskCount} order(s) flagged AT_RISK, DELAYED, or BLOCKED.`,
     );
+    if (inv.shortages.length > 0) {
+      const leadTimes = inv.shortages
+        .map((s) => s.lead_time_days)
+        .filter((d): d is number => typeof d === "number" && d > 0);
+      if (leadTimes.length > 0) {
+        verifiedFacts.push(
+          `Supplier lead times on file range from ${Math.min(...leadTimes)} to ${Math.max(...leadTimes)} days for the flagged materials.`,
+        );
+      }
+    }
   }
   if (isUnitConversion && intent?.direct_answer) {
     verifiedFacts.push(`Exact unit conversion computed deterministically: ${intent.direct_answer}`);
   }
+  if (isUnsupported && intent?.direct_answer) {
+    verifiedFacts.push("Capability boundary check completed; no data was retrieved or modified.");
+  }
   if (backend) {
     verifiedFacts.push(
-      `Session persisted across ${backend.turn_count} turn(s) with status ${backend.status}.`,
+      `Conversation state persisted across ${backend.turn_count} turn(s); final status ${backend.status}.`,
     );
   } else {
     verifiedFacts.push(
-      `Analyzed ${analysis.spans.length} ambiguity span(s) in "${analysis.domain}" domain.`,
+      `Analyzed ${analysis.spans.length} ambiguity span(s) in "${analysis.domain}" domain (client-side preview).`,
     );
   }
 
@@ -59,7 +83,7 @@ export function ExplainabilityLedger({
   const interpretationsSummary: string[] = [];
   if (backend?.classification) {
     interpretationsSummary.push(
-      `Classification: ${backend.classification} (Ambiguity Index: ${analysis.ambiguityScore}%).`,
+      `Classification: ${backend.classification}. Clarity estimate: ${analysis.ambiguityScore}% ambiguity index (structural heuristic, not a calibrated probability).`,
     );
   }
   if (backend?.missing_required_info && backend.missing_required_info.length > 0) {
@@ -75,38 +99,43 @@ export function ExplainabilityLedger({
         .join(" | ")}.`,
     );
   } else if (isResolved) {
+    interpretationsSummary.push("No competing interpretations detected; instruction treated as unambiguous.");
+  }
+  if (intent?.direct_answer && !hasVerifiedAnswer) {
     interpretationsSummary.push(
-      "No competing interpretations detected; instruction is unambiguous.",
+      "The displayed answer was generated by the AI language engine and has NOT been verified against application data.",
     );
   }
 
   // 4. Estimates, Assumptions & Recommendations
   const estimatesAndRecs: string[] = [];
   if (inv) {
-    estimatesAndRecs.push(
-      "Estimate/Assumption: Projected ship dates assume supplier replenishment within configured material lead times.",
-    );
     if (inv.shortages.length > 0) {
       const top = inv.shortages[0]!;
       estimatesAndRecs.push(
-        `Recommendation: Review ${inv.shortages.length} shortage(s) — e.g., ${top.material_id} suggested PO +${top.recommended_purchase_qty} ${top.unit}.`,
+        `Recommendation: Review ${inv.shortages.length} shortage(s) — e.g., ${top.material_id} suggested PO quantity ${top.recommended_purchase_qty} ${top.unit}.`,
       );
+      estimatesAndRecs.push(
+        "Projected ship dates for shortage-affected orders are estimates based on supplier lead times and incoming supply, not confirmed delivery commitments.",
+      );
+    } else {
+      estimatesAndRecs.push("No material is currently below its reorder threshold or has unmet order demand.");
     }
   } else if (!isResolved && analysis.clarificationQuestions.length > 0) {
     estimatesAndRecs.push(
       `Recommendation: Answer ${analysis.clarificationQuestions.length} targeted clarification question(s) before execution.`,
     );
-  } else {
+  } else if (backend?.analysis_source === "offline_fallback") {
     estimatesAndRecs.push(
-      "Assumption: Clarity and ambiguity scores reflect structural completeness of the instruction.",
+      "The live AI service was unavailable, so this result comes from deterministic fallback rules and may be less nuanced.",
     );
   }
 
   // 5. Execution Status (Completed vs Not Executed)
   const completedActions: string[] = [];
   const notExecuted: string[] = [
-    "No external email, message, or third-party API action was executed.",
-    "No purchase order is finalized or sent to suppliers without Procurement Manager / Admin approval.",
+    "No external email, message, or third-party action was executed by ResolveX.",
+    "Purchase-order proposals require Procurement Manager or Admin approval before any order is finalized.",
   ];
   if (isResolved) {
     completedActions.push(
@@ -118,7 +147,7 @@ export function ExplainabilityLedger({
     completedActions.push("Ambiguity diagnostic recorded; awaiting user clarification.");
   }
   if (inv) {
-    completedActions.push("Live SQLite inventory, shortages, and CRD risks queried.");
+    completedActions.push("Inventory position, shortages, and order risks queried from the application database.");
   }
 
   return (
@@ -177,13 +206,17 @@ export function ExplainabilityLedger({
             <Lightbulb className="h-3.5 w-3.5" />
             <span>Estimates, Assumptions &amp; Recommendations</span>
           </div>
-          <ul className="space-y-1.5 text-slate-200 list-disc list-inside">
-            {estimatesAndRecs.map((item, idx) => (
-              <li key={idx} className="leading-relaxed">
-                {item}
-              </li>
-            ))}
-          </ul>
+          {estimatesAndRecs.length > 0 ? (
+            <ul className="space-y-1.5 text-slate-200 list-disc list-inside">
+              {estimatesAndRecs.map((item, idx) => (
+                <li key={idx} className="leading-relaxed">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-slate-400">No estimates or recommendations apply to this result.</p>
+          )}
         </div>
 
         {/* Action Execution Status */}

@@ -197,7 +197,7 @@ function ResolutionPage() {
                 ? "Verified Answer (Deterministic Unit Converter)"
                 : activeAnalysis.backendData.resolved_intent.action === "unsupported_request"
                   ? "Capability Boundary (System Guardrail)"
-                  : "Resolved Answer (AI + Context)"}
+                  : "AI-Generated Answer (Not Verified Against App Data)"}
           </p>
           <p className="text-sm sm:text-base text-white">
             {activeAnalysis.backendData.resolved_intent.direct_answer}
@@ -490,7 +490,7 @@ function ResolutionPage() {
         <Card className="lg:col-span-7 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-base font-semibold text-white">
-              Structured Intent Specification (FastAPI-Ready Payload)
+              Structured Intent Specification (API Payload)
             </h3>
             <div className="flex gap-2">
               <Button

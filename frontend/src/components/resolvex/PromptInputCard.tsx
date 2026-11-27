@@ -231,7 +231,7 @@ export function PromptInputCard({
         <div className="space-y-4">
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Try an ambiguous example prompt (mock dataset):</span>
+              <span>Try an ambiguous example prompt:</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {EXAMPLE_PROMPTS.map((example) => {

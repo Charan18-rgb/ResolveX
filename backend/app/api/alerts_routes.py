@@ -1,4 +1,4 @@
-"""Role-based briefing and alerts API routes (PS2)."""
+"""Role-based briefing and alerts API routes ()."""
 
 from typing import Any
 from fastapi import APIRouter, Depends, Header, Query
@@ -10,7 +10,7 @@ from app.inventory.order_risk_engine import evaluate_order_risks
 from app.inventory.purchase_order_engine import list_proposals
 from app.inventory.shortage_detector import detect_shortages
 
-alerts_router = APIRouter(prefix="/api", tags=["PS2 Alerts & Briefings"])
+alerts_router = APIRouter(prefix="/api", tags=["Alerts & Briefings"])
 
 ROLE_BRIEFING_FOCUS = {
     "INVENTORY_PLANNER": ["inventory", "shortages", "orders", "alerts"],
@@ -32,7 +32,11 @@ def get_alerts(
         if acknowledged is not None:
             query += " WHERE acknowledged = ?"
             params.append(int(acknowledged))
-        query += " ORDER BY severity DESC, created_at DESC;"
+        query += (
+            " ORDER BY CASE severity"
+            " WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2"
+            " WHEN 'LOW' THEN 3 ELSE 4 END, created_at DESC;"
+        )
         rows = conn.execute(query, params).fetchall()
     alerts = [
         {
@@ -124,13 +128,16 @@ def get_briefing(
     if "alerts" in focus:
         with get_connection(settings.database_path) as conn:
             rows = conn.execute(
-                "SELECT * FROM inventory_alerts WHERE acknowledged = 0 ORDER BY severity DESC LIMIT 10;"
+                "SELECT * FROM inventory_alerts WHERE acknowledged = 0"
+                " ORDER BY CASE severity"
+                " WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'MEDIUM' THEN 2"
+                " WHEN 'LOW' THEN 3 ELSE 4 END, created_at DESC LIMIT 10;"
             ).fetchall()
         briefing["sections"].append(
             {"section": "Active Alerts", "data": {"alerts": [dict(r) for r in rows]}}
         )
 
-    briefing["data_source"] = "deterministic_sqlite"
+    briefing["data_source"] = "deterministic_database"
     briefing["ai_enriched"] = False
 
     # Attempt AI enrichment via Gemini (graceful fallback)
@@ -155,13 +162,13 @@ def get_briefing(
         else:
             briefing["ai_summary"] = None
             briefing["ai_note"] = (
-                "AI narrative unavailable right now (Gemini key missing or rate limit reached). "
-                "Deterministic SQLite inventory metrics below remain fully authoritative."
+                "AI narrative unavailable right now (AI service key missing or rate limit reached). "
+                "Deterministic inventory metrics below remain fully authoritative."
             )
     except Exception:
         briefing["ai_summary"] = None
         briefing["ai_note"] = (
-            "AI narrative unavailable right now. Deterministic SQLite inventory metrics remain authoritative."
+            "AI narrative unavailable right now. Deterministic inventory metrics remain authoritative."
         )
 
     return briefing

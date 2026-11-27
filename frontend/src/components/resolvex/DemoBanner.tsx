@@ -19,23 +19,23 @@ export function DemoBanner({ label, description, compact = false }: DemoBannerPr
   const effectiveLabel =
     label ??
     (!isLive
-      ? "MOCK MODE"
+      ? "DEMO MODE (OFFLINE)"
       : isChecking
-        ? "CONNECTING TO BACKEND..."
+        ? "CONNECTING..."
         : isReachable
-          ? `LIVE BACKEND • ${backendHealth?.aiConfigured ? "GEMINI AI ACTIVE" : "FALLBACK MODE"}`
-          : "BACKEND UNREACHABLE");
+          ? `LIVE • ${backendHealth?.aiConfigured ? "AI ENGINE ACTIVE" : "DETERMINISTIC MODE"}`
+          : "SERVICE UNAVAILABLE");
 
   const effectiveDescription =
     description ??
     (!isLive
-      ? "Running in client-side mock mode. Switch to Live Backend in Settings for FastAPI + Gemini + SQLite."
+      ? "Running with sample data only. Switch to Live mode in Settings for real inventory and AI answers."
       : isChecking
-        ? `Checking FastAPI backend health at ${settings.apiBaseUrl}...`
+        ? "Checking connection to the ResolveX service..."
         : isReachable
-          ? `Connected to ${backendHealth?.baseUrl ?? settings.apiBaseUrl} (SQLite DB: ${backendHealth?.database ?? "connected"}).`
+          ? `Connected to the ResolveX service (data: ${backendHealth?.database ?? "connected"}, AI: ${backendHealth?.aiConfigured ? "configured" : "fallback"}).`
           : (backendHealth?.message ??
-            `Cannot reach FastAPI backend at ${settings.apiBaseUrl}. Start uvicorn on port 8000.`));
+            "Cannot reach the ResolveX service. Make sure the backend server is running."));
 
   const borderClass = !isLive
     ? "border-amber-500/30 bg-amber-500/8"

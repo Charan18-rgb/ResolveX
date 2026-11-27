@@ -86,6 +86,15 @@ function EvaluationPage() {
     }
   };
 
+  const SOURCE_LABELS: Record<string, string> = {
+    loading: "Loading…",
+    fresh_run: "Fresh evaluation run",
+    latest_record: "Latest stored record",
+    no_record: "No record yet",
+    computed: "Computed on demand",
+  };
+  const ps6SourceLabel = SOURCE_LABELS[ps6Source] ?? ps6Source;
+
   const ps2ChartData = [
     {
       name: "ResolveX Earliest-CRD",
@@ -109,18 +118,18 @@ function EvaluationPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
-        eyebrow="Unified Benchmark, Adversarial Lab & Telemetry"
+        eyebrow="Benchmarking & Adversarial Testing"
         title={
           activeTab === "adversarial"
             ? "Adversarial Ambiguity Testing Lab"
             : activeTab === "ps6"
-              ? "Live Language Benchmark Telemetry (PS6)"
-              : "Smart Inventory Intelligence Evaluation (PS2)"
+              ? "Live Language Benchmark Telemetry"
+              : "Inventory Allocation Evaluation"
         }
         description={
           activeTab === "adversarial"
             ? "Stress-test ResolveX on challenging multi-ambiguity, contradictory, missing-context, and custom judge sentences."
-            : "Real measured results executed by backend evaluators against the SQLite inventory database and labeled dataset."
+            : "Real measured results executed by backend evaluators against the inventory database and labeled evaluation dataset."
         }
         actions={
           activeTab === "adversarial" ? (
@@ -161,7 +170,7 @@ function EvaluationPage() {
         </div>
       )}
 
-      {/* Domain Switcher: Adversarial Lab vs PS6 vs PS2 */}
+      {/* Domain switcher: Adversarial Lab, Language Benchmark, Inventory Evaluation */}
       <div className="inline-flex flex-wrap rounded-xl border border-white/10 bg-slate-900/75 p-1 gap-1">
         <button
           type="button"
@@ -185,7 +194,7 @@ function EvaluationPage() {
           }`}
         >
           <Languages className="h-4 w-4" />
-          Language Benchmark (PS6)
+          Language Benchmark
         </button>
         <button
           type="button"
@@ -197,7 +206,7 @@ function EvaluationPage() {
           }`}
         >
           <Boxes className="h-4 w-4" />
-          Inventory Allocation Evaluation (PS2)
+          Inventory Allocation Evaluation
         </button>
       </div>
 
@@ -281,7 +290,7 @@ function EvaluationPage() {
           {!ps6Eval ? (
             <Card className="space-y-4 py-8 text-center">
               <p className="text-sm text-slate-300">
-                No language evaluation record persisted yet in SQLite ({ps6Source}).
+                No language evaluation has been run yet ({ps6SourceLabel}).
               </p>
               <div className="flex justify-center">
                 <Button isLoading={isRunningPs6} onClick={() => void handleRunLivePs6()}>
@@ -329,7 +338,7 @@ function EvaluationPage() {
                   </h3>
                   <Badge tone="emerald">
                     <CheckCircle2 className="h-3 w-3" />
-                    Source: {ps6Source}
+                    Source: {ps6SourceLabel}
                   </Badge>
                 </div>
                 <div className="h-72 w-full">

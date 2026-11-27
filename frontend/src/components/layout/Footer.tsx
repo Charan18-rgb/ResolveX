@@ -22,10 +22,7 @@ export function Footer() {
               Inventory &amp; CRD Risk Intelligence.
             </p>
             <p className="text-xs text-slate-500">
-              Live Full-Stack Build • FastAPI + SQLite + Gemini via{" "}
-              <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-300">
-                VITE_API_BASE_URL
-              </code>
+              Unified platform for language understanding and inventory intelligence.
             </p>
           </div>
 
@@ -84,7 +81,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://github.com"
+                  href="https://github.com/Charan18-rgb/ResolveX"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 hover:text-cyan-300 transition-colors"
@@ -98,7 +95,7 @@ export function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/8 pt-6 text-xs text-slate-500">
-          <p>© {CURRENT_YEAR} ResolveX Unified Frontend. Mock client simulation.</p>
+          <p>© {CURRENT_YEAR} ResolveX. Understand the Unclear. Resolve the Intent.</p>
           <p>
             Built with TanStack Start, TypeScript, Tailwind CSS, shadcn/ui, Framer Motion &
             Recharts.

@@ -23,6 +23,11 @@ def generate_proposals_from_shortages(db_path: str) -> list[PurchaseOrderProposa
     shortages = detect_shortages(db_path)
     created: list[PurchaseOrderProposal] = []
     now = _utc_now()
+    # Do not re-propose a material that already has a pending proposal or any
+    # proposal created within the last 7 days (approved or rejected), so
+    # rejected materials are not re-proposed in a loop.
+    dedup_cutoff = datetime.now(timezone.utc).timestamp() - 7 * 24 * 3600
+    from datetime import datetime as _dt
 
     with get_connection(db_path) as conn:
         for s in shortages:
@@ -30,13 +35,19 @@ def generate_proposals_from_shortages(db_path: str) -> list[PurchaseOrderProposa
                 continue
             existing = conn.execute(
                 """
-                SELECT id FROM purchase_order_proposals
-                WHERE material_id = ? AND status = 'PENDING_APPROVAL';
+                SELECT id, created_at FROM purchase_order_proposals
+                WHERE material_id = ?
+                ORDER BY created_at DESC LIMIT 1;
                 """,
                 (s["material_id"],),
             ).fetchone()
             if existing:
-                continue
+                try:
+                    last_ts = _dt.fromisoformat(str(existing["created_at"])).timestamp()
+                except (TypeError, ValueError):
+                    last_ts = 0.0
+                if last_ts > dedup_cutoff:
+                    continue
 
             proposal_id = f"PO-{uuid.uuid4().hex[:8].upper()}"
             reason = (

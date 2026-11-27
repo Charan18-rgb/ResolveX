@@ -1,4 +1,4 @@
-"""Purchase order proposal and approval API routes (PS2 HITL)."""
+"""Purchase order proposal and approval API routes ( HITL)."""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
@@ -10,7 +10,7 @@ from app.inventory.purchase_order_engine import (
 from app.models.procurement_schemas import ProposalDecisionRequest, PurchaseOrderProposal
 from app.services.approval_service import ALLOWED_APPROVAL_ROLES, decide_proposal
 
-procurement_router = APIRouter(prefix="/api", tags=["PS2 Procurement & HITL Approval"])
+procurement_router = APIRouter(prefix="/api", tags=["Procurement & Approval"])
 
 
 @procurement_router.get(

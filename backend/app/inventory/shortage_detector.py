@@ -51,7 +51,11 @@ def detect_shortages(db_path: str) -> list[dict[str, Any]]:
                         (mat_id,),
                     ).fetchall()
                 ]
-                recommended_qty = round(max(unmet_qty - float(row["incoming"]), 0.0) + threshold, 2)
+                # Cover unmet demand not already covered by incoming supply,
+                # plus top net availability back up to the reorder threshold.
+                unmet_beyond_incoming = max(unmet_qty - float(row["incoming"]), 0.0)
+                threshold_gap = max(threshold - max(net_avail, 0.0), 0.0)
+                recommended_qty = round(unmet_beyond_incoming + threshold_gap, 2)
                 shortages.append(
                     {
                         "material_id": mat_id,
@@ -75,8 +79,15 @@ def detect_shortages(db_path: str) -> list[dict[str, Any]]:
 
 
 def sync_inventory_alerts(db_path: str) -> None:
-    """Create proactive STOCK_OUT / LOW_STOCK alerts when shortages are detected."""
-    now = datetime.now(timezone.utc).isoformat()
+    """Create proactive STOCK_OUT / LOW_STOCK alerts when shortages are detected.
+
+    An alert is suppressed while an unacknowledged alert for the same
+    type+entity exists, and for 24h after the most recent alert was
+    acknowledged, so persistent conditions do not spam the alert feed.
+    """
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    renotify_after = now_dt.timestamp() - 24 * 3600
     shortages = detect_shortages(db_path)
     with get_connection(db_path) as conn:
         for item in shortages:
@@ -84,12 +95,19 @@ def sync_inventory_alerts(db_path: str) -> None:
             severity = "CRITICAL" if item["unmet_order_demand"] > 0 else "MEDIUM"
             existing = conn.execute(
                 """
-                SELECT id FROM inventory_alerts
-                WHERE alert_type = ? AND entity_id = ? AND acknowledged = 0;
+                SELECT acknowledged, created_at FROM inventory_alerts
+                WHERE alert_type = ? AND entity_id = ?
+                ORDER BY created_at DESC LIMIT 1;
                 """,
                 (alert_type, item["material_id"]),
             ).fetchone()
-            if not existing:
+            if existing:
+                try:
+                    last_ts = datetime.fromisoformat(str(existing["created_at"])).timestamp()
+                except (TypeError, ValueError):
+                    last_ts = 0.0
+                if not existing["acknowledged"] or last_ts > renotify_after:
+                    continue
                 conn.execute(
                     """
                     INSERT INTO inventory_alerts (alert_type, severity, entity_id, message, acknowledged, created_at)

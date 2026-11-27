@@ -213,7 +213,9 @@ function InterpretationsPage() {
                     ? "Abstained"
                     : interp.confidenceScore != null
                       ? `${Math.round(interp.confidenceScore * 100)}%`
-                      : `${interp.probability}%`;
+                      : typeof interp.probability === "number"
+                        ? `${interp.probability}%`
+                        : "—";
                   return (
                     <th key={interp.id} className="px-5 py-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -310,7 +312,9 @@ function InterpretationsPage() {
               ? "Abstained"
               : interp.confidenceScore != null
                 ? `${Math.round(interp.confidenceScore * 100)}% Conf`
-                : `${interp.probability}%`;
+                : typeof interp.probability === "number"
+                  ? `${interp.probability}%`
+                  : "—";
             return (
               <Card
                 key={interp.id}
@@ -335,7 +339,15 @@ function InterpretationsPage() {
                           : "bg-gradient-to-r from-violet-500 to-cyan-400"
                       }`}
                       style={{
-                        width: `${isAbstained ? 18 : interp.confidenceScore != null ? Math.round(interp.confidenceScore * 100) : interp.probability}%`,
+                        width: `${
+                          isAbstained
+                            ? 18
+                            : interp.confidenceScore != null
+                              ? Math.round(interp.confidenceScore * 100)
+                              : typeof interp.probability === "number"
+                                ? interp.probability
+                                : 0
+                        }%`,
                       }}
                     />
                   </div>

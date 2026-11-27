@@ -8,6 +8,12 @@ from app.models.order_schemas import MissingMaterialDetail, OrderRiskItem, RiskC
 
 def evaluate_order_risks(db_path: str) -> list[OrderRiskItem]:
     """Evaluate CRD risk and projected ship dates for all OPEN orders."""
+    from app.inventory.allocation_engine import recalculate_allocations
+
+    # Refresh allocations first so orders created via events are assessed
+    # against current inventory rather than stale allocation rows.
+    recalculate_allocations(db_path)
+
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     today = now.date()
@@ -25,8 +31,19 @@ def evaluate_order_risks(db_path: str) -> list[OrderRiskItem]:
         ).fetchall()
 
         for order in orders:
-            crd_date = date.fromisoformat(order["customer_request_date"])
-            proc_days = int(order["processing_days"] or 1)
+            try:
+                crd_date = date.fromisoformat(str(order["customer_request_date"]))
+                crd_valid = True
+            except (TypeError, ValueError):
+                crd_date = None
+                crd_valid = False
+            raw_proc = order["processing_days"]
+            proc_days = max(0, int(raw_proc)) if raw_proc is not None else 1
+
+            has_bom = conn.execute(
+                "SELECT COUNT(*) AS c FROM bills_of_materials WHERE product_code = ?;",
+                (order["product_code"],),
+            ).fetchone()["c"] > 0
 
             alloc_rows = conn.execute(
                 """
@@ -75,7 +92,21 @@ def evaluate_order_risks(db_path: str) -> list[OrderRiskItem]:
             ship_status: Literal["CALCULATED", "ESTIMATED", "UNAVAILABLE"] = "CALCULATED"
             risk: RiskCategory
 
-            if not missing:
+            if not crd_valid:
+                ship_status = "UNAVAILABLE"
+                risk = "BLOCKED"
+                explanation = (
+                    f"Customer required date '{order['customer_request_date']}' is missing or invalid; "
+                    "projected ship date cannot be assessed against it."
+                )
+            elif not has_bom:
+                ship_status = "UNAVAILABLE"
+                risk = "AT_RISK"
+                explanation = (
+                    f"No bill of materials is defined for product '{order['product_code']}'; "
+                    "material requirements could not be verified against inventory."
+                )
+            elif not missing:
                 proj_date = today + timedelta(days=proc_days)
                 projected_ship = proj_date.isoformat()
                 if proj_date <= crd_date:

@@ -148,7 +148,8 @@ export interface Interpretation {
   id: string;
   title: string;
   summary: string;
-  probability: number;
+  /** Illustrative weight for demo scenarios only; omitted for live backend analyses. */
+  probability?: number | undefined;
   impactScope: string;
   riskLevel: RiskLevel;
   assumptions: string[];
@@ -700,7 +701,7 @@ export interface NotificationItem {
   id: string;
   title: string;
   detail: string;
-  category: "PS6" | "PS2";
+  category: "Language" | "Inventory";
   severity: "info" | "warning" | "critical";
   route: string;
   read: boolean;
@@ -1174,6 +1175,7 @@ export interface BackendAnalyzeResponse {
   resolved_intent?: BackendResolvedIntentPayload | null;
   inventory_insight?: BackendInventoryInsight | null;
   turn_count: number;
+  analysis_source?: "gemini" | "local" | "offline_fallback" | "system" | null;
 }
 
 export interface BackendConversationSummary {

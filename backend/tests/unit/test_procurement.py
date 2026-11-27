@@ -111,6 +111,6 @@ def test_procurement_api_endpoints(tmp_path: Path, monkeypatch: pytest.MonkeyPat
             # Briefing
             briefing = client.get("/api/briefings?role=INVENTORY_PLANNER")
             assert briefing.status_code == 200
-            assert briefing.json()["data_source"] == "deterministic_sqlite"
+            assert briefing.json()["data_source"] == "deterministic_database"
     finally:
         get_settings.cache_clear()

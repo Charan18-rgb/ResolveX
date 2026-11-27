@@ -90,9 +90,8 @@ function AnalysisPage() {
                   Classification: {activeAnalysis.backendData.classification}
                 </Badge>
               )}
-              <span className="font-mono text-slate-400">
-                Session: {activeAnalysis.backendData.conversation_id.slice(0, 8)}… • Turn{" "}
-                {activeAnalysis.backendData.turn_count}
+              <span className="text-slate-400">
+                Conversation details • Turn {activeAnalysis.backendData.turn_count}
               </span>
             </div>
             {activeAnalysis.backendData.status === "RESOLVED" && (

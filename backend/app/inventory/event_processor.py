@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 import json
 import sqlite3
+import uuid
+from datetime import date as _date
 from typing import Any
 
 from app.database.connection import get_connection
@@ -42,7 +44,7 @@ def _record_malformed_event(
 
 def process_raw_event(db_path: str, raw_data: dict[str, Any]) -> EventIngestionResponse:
     """Validate and process a raw event dict, quarantining malformed payloads."""
-    event_id = str(raw_data.get("event_id") or f"malformed-{int(datetime.now(timezone.utc).timestamp() * 1000)}")
+    event_id = str(raw_data.get("event_id") or f"malformed-{uuid.uuid4().hex[:12]}")
     event_type = str(raw_data.get("event_type") or "UNKNOWN")
     entity_ref = str(raw_data.get("entity_ref") or "UNKNOWN")
     simulated = bool(raw_data.get("simulated", False))
@@ -90,7 +92,7 @@ def process_event(db_path: str, event: InventoryEventRequest) -> EventIngestionR
 
         try:
             _apply_event(conn, event, now)
-        except ValueError as exc:
+        except (ValueError, sqlite3.IntegrityError) as exc:
             _record_malformed_event(
                 conn,
                 event.event_id,
@@ -194,8 +196,22 @@ def _apply_event(conn: sqlite3.Connection, event: InventoryEventRequest, now: st
 
     if et == "ORDER_CREATED":
         qty = int(p.get("quantity", 0))
-        if qty <= 0 or not p.get("customer_name") or not p.get("product_code") or not p.get("customer_request_date"):
-            raise ValueError("ORDER_CREATED requires customer_name, product_code, positive quantity, and customer_request_date.")
+        crd = str(p.get("customer_request_date") or "")
+        try:
+            _date.fromisoformat(crd)
+            crd_ok = True
+        except ValueError:
+            crd_ok = False
+        existing_order = conn.execute(
+            "SELECT id FROM orders WHERE id = ?;", (event.entity_ref,)
+        ).fetchone()
+        if qty <= 0 or not p.get("customer_name") or not p.get("product_code") or not crd_ok:
+            raise ValueError(
+                "ORDER_CREATED requires customer_name, product_code, positive quantity, "
+                "and a valid ISO customer_request_date (YYYY-MM-DD)."
+            )
+        if existing_order:
+            raise ValueError(f"Order '{event.entity_ref}' already exists.")
         conn.execute(
             """
             INSERT INTO orders (
@@ -220,6 +236,15 @@ def _apply_event(conn: sqlite3.Connection, event: InventoryEventRequest, now: st
         order = conn.execute("SELECT id FROM orders WHERE id = ?;", (event.entity_ref,)).fetchone()
         if not order:
             raise ValueError(f"Unknown order_id '{event.entity_ref}'.")
+        new_qty = p.get("quantity")
+        if new_qty is not None and int(new_qty) <= 0:
+            raise ValueError("ORDER_UPDATED quantity must be positive.")
+        new_crd = p.get("customer_request_date")
+        if new_crd is not None:
+            try:
+                _date.fromisoformat(str(new_crd))
+            except ValueError:
+                raise ValueError("ORDER_UPDATED customer_request_date must be ISO format (YYYY-MM-DD).")
         conn.execute(
             """
             UPDATE orders

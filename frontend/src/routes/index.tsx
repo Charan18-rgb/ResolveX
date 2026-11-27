@@ -87,7 +87,7 @@ const FEATURE_CARDS = [
     icon: Package,
     to: "/inventory",
     description:
-      "Monitor stock availability, CRD delay risks, shortages, PO recommendations, and approvals across demo roles.",
+      "Monitor stock availability, CRD delay risks, shortages, PO recommendations, and approvals across team roles.",
   },
 ] as const;
 
@@ -257,7 +257,7 @@ function LandingPage() {
                 <div className="flex flex-wrap items-center gap-2.5">
                   <Badge tone={!activeAnalysis.isDemoData ? "emerald" : "cyan"}>
                     {!activeAnalysis.isDemoData
-                      ? `LIVE BACKEND (${activeAnalysis.backendData?.status ?? "ANALYZED"})`
+                      ? `LIVE RESULT (${activeAnalysis.backendData?.status ?? "ANALYZED"})`
                       : hasAnalyzedHere
                         ? "SIMULATED FALLBACK"
                         : "SAMPLE ANALYSIS PREVIEW"}

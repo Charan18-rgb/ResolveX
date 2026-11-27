@@ -4,7 +4,7 @@
 
 | Requirement | Implementation Evidence | Status |
 |---|---|---|
-| **Measurable success & baseline comparison** | Inventory: `8/8` (`100%`) vs `50%` FIFO baseline (`ps2_evaluator.py`); Language: Precision, Recall, F1, Accuracy (`ps6_evaluator.py`, `/evaluation`). | **COVERED** |
+| **Measurable success & baseline comparison** | Inventory: `8/8` (`100%`) vs **measured** `75%` reactive-FIFO baseline (`ps2_evaluator.py`, corrected 2026-11-27 — previously a hardcoded `50%` constant); Language: Precision `0.947`, Recall `1.0`, F1 `0.973`, resolution accuracy `0.771` on 48-case live Gemini run (`ps6_evaluator.py`, `/evaluation`). See `FINAL_EVALUATION_METRICS.md`. | **COVERED** |
 | **Detect NL ambiguity & multiple interpretations** | `ambiguity_detector.py`, `local_analyzer.py`, `interpretations` SQLite table, `/interpretations` What-If Simulator. | **COVERED** |
 | **Interactive clarification & multi-turn context** | `clarification_engine.py`, `context_analyzer.py`, `POST /api/clarify`, `/clarification` Priority Optimizer. | **COVERED** |
 | **Clear inputs resolved without unnecessary clarification** | Post-condition in `ambiguity_detector.py` + deterministic unit & inventory resolvers. | **COVERED** |

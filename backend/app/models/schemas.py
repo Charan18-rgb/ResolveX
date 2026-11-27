@@ -261,3 +261,7 @@ class AnalyzeResponse(BaseModel):
     confidence_history: list[ConfidenceHistoryPoint] = Field(default_factory=list)
     context_memory: Optional[SessionContextMemory] = None
     risk_assessment: Optional[IntentRiskAssessment] = None
+    analysis_source: Optional[Literal["gemini", "local", "offline_fallback", "system"]] = Field(
+        default=None,
+        description="Which engine produced the analysis: live Gemini, deterministic local rules, offline fallback, or system force-resolution.",
+    )

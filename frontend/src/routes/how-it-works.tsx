@@ -90,7 +90,7 @@ const PIPELINE_DETAILS: PipelineDetail[] = [
     transformation:
       "Audits essential required vs. optional intent fields for missing, ambiguous, or contradictory states. Routes back to clarification if required checks fail; compiles verified JSON once all gates pass.",
     outputExample:
-      "Verified natural-language directive + FastAPI-ready structured intent contract.",
+      "Verified natural-language directive + API-ready structured intent contract.",
   },
   {
     id: "inventory",
@@ -290,7 +290,7 @@ function HowItWorksPage() {
             <Server className="h-5 w-5 text-cyan-400" />
             <div>
               <h3 className="text-lg font-semibold text-white">
-                Future FastAPI Integration Contract
+                Service Integration Reference
               </h3>
               <p className="text-xs text-slate-400">
                 Centralized service layer configured with{" "}

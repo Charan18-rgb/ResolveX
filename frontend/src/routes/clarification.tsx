@@ -477,14 +477,9 @@ function ClarificationPage() {
                         placeholder={`Specify exact constraint for "${displayedQuestion.targetToken}"...`}
                         className="flex-1 rounded-xl border border-white/12 bg-[#050814]/90 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none disabled:opacity-60"
                       />
-                      <Button
-                        type="submit"
-                        variant="secondary"
-                        isLoading={isSubmittingClarification}
-                      >
-                        {isSubmittingClarification
-                          ? "Sending to Gemini..."
-                          : "Submit Clarification"}
+                      <Button type="submit" variant="secondary" isLoading={isSubmittingClarification}>
+                        {isSubmittingClarification ? "Sending..." : "Submit Clarification"}
+                      </Button>
                       </Button>
                     </div>
                     {customError && (

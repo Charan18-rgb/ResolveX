@@ -158,7 +158,7 @@ export async function requestFastApi<TResponse>(
       const errMessage =
         errRecord?.error?.message ||
         errRecord?.detail ||
-        `Backend request failed with HTTP ${response.status}`;
+        `The service returned an unexpected error (status ${response.status}).`;
       const errCode = errRecord?.error?.code || `HTTP_${response.status}`;
       throw new ApiServiceError(errMessage, {
         status: response.status,
@@ -181,12 +181,12 @@ export async function requestFastApi<TResponse>(
     }
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new ApiServiceError(
-        `Request timed out after ${Math.round(timeoutMs / 1000)}s. Gemini or the backend may be busy.`,
+        `Request timed out. The analysis service may be busy — please try again.`,
         { code: "REQUEST_TIMEOUT", isNetworkError: true },
       );
     }
     throw new ApiServiceError(
-      `Unable to reach ResolveX backend at ${normalizedBase}. Verify the FastAPI server is running.`,
+      `Unable to reach the ResolveX service. Please check your connection and try again.`,
       { code: "BACKEND_UNREACHABLE", isNetworkError: true },
     );
   } finally {
@@ -336,7 +336,6 @@ export function adaptBackendAnalysisToUi(
     id: `interp-${idx + 1}`,
     title: item.label,
     summary: item.description,
-    probability: Math.round(100 / Math.max(1, backend.interpretations.length)),
     impactScope: domain,
     riskLevel: idx === 0 ? "Moderate" : "High",
     assumptions: [item.description],
@@ -369,7 +368,7 @@ export function adaptBackendAnalysisToUi(
         ambiguityScore / Math.max(1, backend.clarification_questions.length),
       ),
       necessityReason: "Required by backend ambiguity analysis to resolve intent.",
-      selectionExplanation: `Turn ${backend.turn_count} question from ResolveX Gemini analyzer.`,
+      selectionExplanation: `Turn ${backend.turn_count} question from the ResolveX analysis engine.`,
       options: interpretations.slice(0, 3).map((interp, optIdx) => ({
         id: `opt-${idx}-${optIdx}`,
         label: interp.title,

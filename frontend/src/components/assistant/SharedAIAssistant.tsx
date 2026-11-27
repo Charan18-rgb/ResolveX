@@ -58,7 +58,7 @@ export function SharedAIAssistant() {
               </Badge>
             </div>
             <p className="text-[11px] text-slate-400">
-              Gemini AI + Live SQLite • Role: {activeRole}
+              AI Engine + Live Data • Role: {activeRole}
             </p>
           </div>
         </div>
@@ -198,7 +198,7 @@ export function SharedAIAssistant() {
         {isAssistantLoading && (
           <div className="mr-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0b1124] px-3.5 py-3 text-xs text-cyan-300">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Querying ResolveX backend...</span>
+            <span>Thinking...</span>
           </div>
         )}
       </div>
@@ -207,7 +207,7 @@ export function SharedAIAssistant() {
       <form onSubmit={handleSubmit} className="border-t border-white/10 p-4 space-y-2">
         {assistantConversationId && (
           <p className="text-[10px] text-amber-300">
-            Replying to clarification thread ({assistantConversationId.slice(0, 8)}…)
+            Replying in an ongoing clarification conversation
           </p>
         )}
         <div className="flex gap-2">

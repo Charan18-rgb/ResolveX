@@ -323,17 +323,22 @@ def _send_request(text: str) -> LocalMatch | None:
     )
 
 
+_CONTRADICTION_PAIRS = [
+    ("cancel", "ship"),
+    ("cancel", "confirm"),
+    ("approve", "reject"),
+    ("delete", "keep"),
+    ("increase", "decrease"),
+]
+
+
 def _contradiction(text: str) -> LocalMatch | None:
-    norm = _normalize(text)
-    pairs = [
-        ("cancel", "ship"),
-        ("cancel", "confirm"),
-        ("approve", "reject"),
-        ("delete", "keep"),
-        ("increase", "decrease"),
-    ]
-    for left, right in pairs:
-        if left in norm and right in norm:
+    """Detect conflicting action verbs. Uses exact-word matching so that
+    'approved'/'rejected' filter queries are not mistaken for commands."""
+    for left, right in _CONTRADICTION_PAIRS:
+        has_left = re.search(rf"\b{left}\b", text, flags=re.IGNORECASE) is not None
+        has_right = re.search(rf"\b{right}\b", text, flags=re.IGNORECASE) is not None
+        if has_left and has_right:
             return LocalMatch(
                 _ask(
                     "ambiguous",
@@ -346,7 +351,7 @@ def _contradiction(text: str) -> LocalMatch | None:
                     ],
                     "The instruction contains conflicting actions.",
                 ),
-                False,
+                True,
             )
     return None
 
@@ -382,16 +387,85 @@ def _unsupported(text: str) -> LocalMatch | None:
     )
 
 
-def match_local(instruction: str, extra_context: str = "") -> LocalMatch | None:
-    """Return a local reading of the instruction, or None if no pattern matches."""
+_INTENT_FINDERS = (
+    ("unit_conversion", _unit_conversion),
+    ("unsupported_request", _unsupported),
+    ("inventory_lookup", _inventory_query),
+    ("send_request", _send_request),
+)
+
+
+def _intent_label(name: str, match: LocalMatch) -> str:
+    intent = match.analysis.resolved_intent
+    if intent is not None and intent.resolved_instruction:
+        return intent.resolved_instruction.strip()
+    if match.analysis.interpretations:
+        return match.analysis.interpretations[0].label
+    return name.replace("_", " ")
+
+
+def _multi_intent_ask(hits: list[tuple[str, LocalMatch]], authoritative: bool = True) -> LocalMatch:
+    labels = [_intent_label(name, match) for name, match in hits[:4]]
+    joined = "; ".join(labels)
+    questions = [
+        f"I found more than one request in that instruction ({joined}). "
+        "Which should ResolveX handle first?"
+    ]
+    # Surface any sub-questions from partially-specified hits (e.g. missing recipient).
+    for _, match in hits:
+        for q in match.analysis.clarification_questions:
+            if q not in questions and len(questions) < 3:
+                questions.append(q)
+    return LocalMatch(
+        _ask(
+            "ambiguous",
+            ["structural"],
+            ["Which of the multiple detected requests should be handled first"],
+            questions,
+            [(label, "Detected as a separate request in the same instruction.") for label in labels],
+            "The instruction contains multiple distinct requests; only one can be resolved per turn.",
+        ),
+        authoritative,
+    )
+
+
+def match_local(
+    instruction: str,
+    extra_context: str = "",
+    multi_intent_authoritative: bool = True,
+) -> LocalMatch | None:
+    """Return a local reading of the instruction, or None if no pattern matches.
+
+    Conflicting-action detection runs first on the raw instruction only, so
+    keywords from earlier conversation turns cannot trigger false positives.
+    When two or more distinct intents match the same instruction, the request
+    is escalated to clarification instead of silently dropping intents.
+    """
     text = f"{instruction}\n{extra_context}".strip()
     if not text:
         return None
-    for finder in (_unit_conversion, _unsupported, _inventory_query, _contradiction, _send_request):
-        # Conversion and capability checks look at the user instruction first.
-        found = finder(instruction) or (finder(text) if extra_context else None)
-        if found is not None:
-            return found
+
+    contradiction = _contradiction(instruction)
+    if contradiction is not None:
+        return contradiction
+
+    primary: list[tuple[str, LocalMatch]] = []
+    secondary: list[tuple[str, LocalMatch]] = []
+    for name, finder in _INTENT_FINDERS:
+        on_instruction = finder(instruction)
+        if on_instruction is not None:
+            primary.append((name, on_instruction))
+            continue
+        if extra_context:
+            on_text = finder(text)
+            if on_text is not None:
+                secondary.append((name, on_text))
+
+    hits = primary or secondary
+    if len(hits) > 1:
+        return _multi_intent_ask(hits, authoritative=multi_intent_authoritative)
+    if hits:
+        return hits[0][1]
     return None
 
 
@@ -415,27 +489,34 @@ def clarify_locally(
     original_instruction: str,
     new_response: str,
     asked_questions: list[str],
-) -> GeminiAnalysisOutput:
-    """Re-read a clarification turn without Gemini."""
+) -> tuple[GeminiAnalysisOutput, str]:
+    """Re-read a clarification turn without Gemini.
+
+    Returns (analysis, source) where source is "local" when a deterministic
+    pattern matched and "offline_fallback" otherwise.
+    """
     combined = f"{original_instruction}\n{new_response}"
-    matched = match_local(combined, new_response)
+    matched = match_local(combined, new_response, multi_intent_authoritative=False)
     if matched is not None:
         analysis = matched.analysis
         if analysis.clarification_questions and asked_questions:
             asked_norm = {q.strip().lower() for q in asked_questions}
             fresh = [q for q in analysis.clarification_questions if q.strip().lower() not in asked_norm]
             if not fresh and analysis.needs_clarification:
-                return _clear(
-                    "record_partial_instruction",
-                    combined.strip(),
-                    {},
-                    (
-                        "Clarification limit for this pattern was reached with the details provided. "
-                        "ResolveX recorded the conversation and did not perform an external action."
+                return (
+                    _clear(
+                        "record_partial_instruction",
+                        combined.strip(),
+                        {},
+                        (
+                            "Clarification limit for this pattern was reached with the details provided. "
+                            "ResolveX recorded the conversation and did not perform an external action."
+                        ),
+                        "No new clarification question remains.",
                     ),
-                    "No new clarification question remains.",
+                    "local",
                 )
             if fresh != analysis.clarification_questions:
-                return analysis.model_copy(update={"clarification_questions": fresh})
-        return analysis
-    return offline_fallback(combined)
+                return analysis.model_copy(update={"clarification_questions": fresh}), "local"
+        return analysis, "local"
+    return offline_fallback(combined), "offline_fallback"

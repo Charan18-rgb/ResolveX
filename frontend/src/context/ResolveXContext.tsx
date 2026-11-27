@@ -401,8 +401,9 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       id: `alert-${a.id}`,
       title: `${a.alert_type} • ${a.entity_id}`,
       detail: a.message,
-      category: "PS2",
-      severity: a.severity === "CRITICAL" ? "critical" : a.severity === "HIGH" ? "warning" : "info",
+      category: "Inventory",
+      severity:
+        a.severity === "CRITICAL" ? "critical" : a.severity === "HIGH" ? "warning" : "info",
       route: "/inventory",
       read: a.acknowledged || readNotificationIds.has(`alert-${a.id}`),
     }));
@@ -679,7 +680,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         const msg =
           err instanceof Error
             ? err.message
-            : "Analysis request failed. Verify the FastAPI backend is running.";
+            : "Analysis request failed. Please try again.";
         setApiError(msg);
         throw err;
       } finally {
@@ -839,7 +840,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
             targetToken: question?.targetToken,
             questionText: question?.question,
             essentialField: question?.essentialField,
-            selectionExplanation: "Sent to ResolveX /api/clarify backend.",
+            selectionExplanation: "Submitted to the ResolveX clarification service.",
             source: selectedOptionId ? "option" : "custom",
           };
 
@@ -1317,7 +1318,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     setAssistantConversationId(null);
   }, []);
 
-  // Shared AI Assistant responder (Unified PS6 + PS2 via FastAPI + Gemini)
+  // Shared AI Assistant responder (unified language + inventory via backend services)
   const sendAssistantQuery = useCallback(
     async (rawQuery: string): Promise<void> => {
       const q = rawQuery.trim();
@@ -1336,69 +1337,18 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       };
       setAssistantMessages((prev) => [...prev, userMsg]);
 
-      let replyText = "";
-      let domainTag: AssistantMessage["domainTag"] = "Unified";
-      let suggestedRoute: string | undefined;
-      let suggestedLabel: string | undefined;
-
-      if (/\b(shortage|stock|sku|mcu|sensor|warehouse|inventory)\b/i.test(lower)) {
-        domainTag = "PS2 Inventory";
-        const shortages = materials.filter((m) => m.health !== "Healthy");
-        replyText = `${shortages.length} materials need attention: ${shortages
-          .map((m) => `${m.sku} (${m.available} avail vs ${m.safetyStock} safety — ${m.health})`)
-          .join("; ")}.`;
-        suggestedRoute = "/inventory";
-        suggestedLabel = "Inspect Materials & Shortages";
-      } else if (/\b(crd|order|delay|tata|reliance|fulfillment)\b/i.test(lower)) {
-        domainTag = "PS2 Inventory";
-        const atRisk = orders.filter((o) => o.crdRisk !== "On Track");
-        replyText = `${atRisk.length} customer orders have CRD risk: ${atRisk
-          .map(
-            (o) =>
-              `${o.orderNumber} (${o.customer}, ${o.daysUntilCrd}d to CRD, ${o.fulfillmentPct}% filled — ${o.crdRisk})`,
-          )
-          .join("; ")}.`;
-        suggestedRoute = "/inventory";
-        suggestedLabel = "Open CRD Risk Monitor";
-      } else if (/\b(approval|po|purchase|recommend|supplier)\b/i.test(lower)) {
-        domainTag = "PS2 Inventory";
-        const pending = approvals.filter((a) => a.status === "Pending");
-        replyText = `${pending.length} approval requests are pending (${pending
-          .map((p) => `${p.sku} $${p.amountUsd.toLocaleString()}`)
-          .join(
-            ", ",
-          )}), and ${recommendations.filter((r) => r.status === "Suggested").length} PO recommendations are ready to draft.`;
-        suggestedRoute = "/inventory";
-        suggestedLabel = "Review PO Approvals";
-      } else if (/\b(confiden|abstain|uncertain|evidence|history|contradict)\b/i.test(lower)) {
-        domainTag = "PS6 Language";
-        const scoreLabel = confidenceAssessment.abstained
-          ? "Abstained (Insufficient / Conflicting Evidence)"
-          : `${Math.round((confidenceAssessment.confidenceScore ?? 0) * 100)}% (${confidenceAssessment.confidenceBand})`;
-        replyText = `Confidence: ${scoreLabel} | Verified Correctness: ${confidenceAssessment.verifiedCorrectness} | Provenance: ${confidenceAssessment.isLiveBackend ? "Live FastAPI Backend" : "Client Simulation (Not Model Output)"}. Supporting: ${confidenceAssessment.supportingEvidence.length}, Contradicting: ${confidenceAssessment.contradictingEvidence.length}.`;
-        suggestedRoute = "/resolution";
-        suggestedLabel = "Open Confidence & Verification Audit";
-      } else if (/\b(verify|verification|missing|complete)\b/i.test(lower)) {
-        domainTag = "PS6 Language";
-        replyText = `Verification status is "${verificationReport.status}" (${verificationReport.completenessScore}% complete): ${verificationReport.completenessExplanation}`;
-        suggestedRoute = verificationReport.allRequiredPassed ? "/resolution" : "/clarification";
-        suggestedLabel = verificationReport.allRequiredPassed
-          ? "Open Final Resolution"
-          : "Fix in Clarification";
-      } else if (
-        /\b(graph|node|ambigu|span|why|interpret|what-if|language|kannada|hindi)\b/i.test(lower)
-      ) {
-        domainTag = "PS6 Language";
-        replyText = `Active prompt (${activeAnalysis.multilingual.detectedLanguage}) has ${activeAnalysis.spans.length} ambiguity spans (${activeAnalysis.ambiguityScore}% ambiguity). Highest-priority unresolved question targets "${optimizerState.activeQuestion?.targetToken ?? "none"}".`;
-        suggestedRoute = "/visualization";
-        suggestedLabel = "View Context Graph";
-      } else {
-        domainTag = "Unified";
-        const shortagesCount = materials.filter((m) => m.health === "Shortage").length;
-        const atRiskOrders = orders.filter((o) => o.crdRisk !== "On Track").length;
-        replyText = `Unified Snapshot (${activeRole}): PS6 prompt is ${verificationReport.completenessScore}% verified (${activeAnalysis.spans.length} spans, ${uiLanguage} UI). PS2 tracks ${shortagesCount} critical SKU shortages and ${atRiskOrders} CRD-at-risk orders.`;
-        suggestedRoute = "/evaluation";
-        suggestedLabel = "View Unified Analytics";
+      if (settings.integrationMode !== "live") {
+        const mockMsg: AssistantMessage = {
+          id: `a-${Date.now() + 1}`,
+          sender: "assistant",
+          text: "Switch to Live mode in Settings to query real inventory data and the AI engine.",
+          domainTag: "Unified",
+          suggestedRoute: "/settings",
+          suggestedLabel: "Open Settings",
+          timestamp: nowLabel,
+        };
+        setAssistantMessages((prev) => [...prev, mockMsg]);
+        return;
       }
 
       setIsAssistantLoading(true);

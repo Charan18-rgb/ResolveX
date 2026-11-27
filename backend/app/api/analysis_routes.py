@@ -1,10 +1,13 @@
 """
-PS6 Analysis API routes — analyze, clarify, resolve, and list conversations.
+Analysis API routes — analyze, clarify, resolve, and list conversations.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 
 from app.config import Settings, get_settings
 from app.models.schemas import AnalyzeRequest, AnalyzeResponse, ClarifyRequest, ResolveRequest
@@ -16,7 +19,7 @@ from app.services.conversation_service import (
 )
 from app.database import operations as db_ops
 
-analysis_router = APIRouter(prefix="/api", tags=["PS6 Analysis"])
+analysis_router = APIRouter(prefix="/api", tags=["Analysis"])
 
 
 @analysis_router.post("/analyze", response_model=AnalyzeResponse, status_code=201)
@@ -36,8 +39,9 @@ def analyze(
         )
     except ConversationError as exc:
         raise HTTPException(status_code=exc.http_status, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+    except Exception:
+        logger.exception("Analysis failed for instruction")
+        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
 
 
 @analysis_router.post("/clarify", response_model=AnalyzeResponse)
@@ -54,11 +58,13 @@ def clarify(
             settings.database_path,
             conversation_id=request.conversation_id,
             response=request.response,
+            max_turns=settings.max_clarification_turns,
         )
     except ConversationError as exc:
         raise HTTPException(status_code=exc.http_status, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Clarification failed: {exc}")
+    except Exception:
+        logger.exception("Clarification failed for conversation %s", request.conversation_id)
+        raise HTTPException(status_code=500, detail="Clarification failed. Please try again.")
 
 
 @analysis_router.post("/resolve", response_model=AnalyzeResponse)
@@ -74,8 +80,9 @@ def resolve(
         return get_resolved_intent(settings.database_path, request.conversation_id)
     except ConversationError as exc:
         raise HTTPException(status_code=exc.http_status, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Resolution fetch failed: {exc}")
+    except Exception:
+        logger.exception("Resolution fetch failed for conversation %s", request.conversation_id)
+        raise HTTPException(status_code=500, detail="Resolution fetch failed. Please try again.")
 
 
 @analysis_router.get("/conversations")

@@ -197,10 +197,12 @@ function VisualizationPage() {
             <div>
               <h3 className="text-base font-semibold text-white">6-Dimension Ambiguity Radar</h3>
               <p className="text-xs text-slate-400">
-                Intensity across linguistic ambiguity taxonomies (Demo Engine)
+                Intensity across detected ambiguity categories
               </p>
             </div>
-            <Badge tone="cyan">DEMO DATA</Badge>
+            <Badge tone={activeAnalysis.isDemoData ? "cyan" : "emerald"}>
+              {activeAnalysis.isDemoData ? "SAMPLE DATA" : "LIVE ANALYSIS"}
+            </Badge>
           </div>
 
           <div className="h-72 w-full">
@@ -246,10 +248,12 @@ function VisualizationPage() {
                 Span Severity vs. Classifier Confidence
               </h3>
               <p className="text-xs text-slate-400">
-                Per-token risk weighting across detected spans (Demo Engine)
+                Per-token risk weighting across detected spans
               </p>
             </div>
-            <Badge tone="cyan">DEMO DATA</Badge>
+            <Badge tone={activeAnalysis.isDemoData ? "cyan" : "emerald"}>
+              {activeAnalysis.isDemoData ? "SAMPLE DATA" : "LIVE ANALYSIS"}
+            </Badge>
           </div>
 
           <div className="h-72 w-full">

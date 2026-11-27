@@ -74,10 +74,15 @@ def seed_demo_data(db_path: str) -> None:
             boms,
         )
 
+        # Creation order intentionally differs from CRD order so that
+        # earliest-CRD-first allocation is distinguishable from naive FIFO.
+        created_early = (now - timedelta(days=3)).isoformat()
+        created_mid = (now - timedelta(days=2)).isoformat()
+        created_late = (now - timedelta(days=1)).isoformat()
         orders = [
-            ("ORD-1001", "Acme Robotics", "PROD-MOTOR-X1", 10, d2, 1, "OPEN", None, None, None, now_iso, now_iso),
-            ("ORD-1002", "Nova Automation", "PROD-MOTOR-X1", 10, d4, 1, "OPEN", None, None, None, now_iso, now_iso),
-            ("ORD-1003", "Titan Heavy Ind.", "PROD-FRAME-S2", 8, d7, 2, "OPEN", None, None, None, now_iso, now_iso),
+            ("ORD-1001", "Acme Robotics", "PROD-MOTOR-X1", 10, d2, 1, "OPEN", None, None, None, created_late, created_late),
+            ("ORD-1002", "Nova Automation", "PROD-MOTOR-X1", 10, d4, 1, "OPEN", None, None, None, created_mid, created_mid),
+            ("ORD-1003", "Titan Heavy Ind.", "PROD-FRAME-S2", 8, d7, 2, "OPEN", None, None, None, created_early, created_early),
         ]
         conn.executemany(
             """

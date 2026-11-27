@@ -1,15 +1,39 @@
-# ResolveX — Evaluation Report (PS6 + PS2)
+# ResolveX — Evaluation Report (Language + Inventory)
 
-*Status: Pending Milestone 6 execution. No metrics will be reported until actual evaluation scripts run.*
+*Updated 2026-11-27 with measured results. See `audit/FINAL_EVALUATION_METRICS.md` for full methodology and caveats.*
 
-## 1. PS6 Evaluation (Ambiguity Identification & Resolution)
-- **Dataset:** 48 labelled cases (`12` ambiguous, `12` incomplete, `12` context_dependent, `12` clear).
-- **Metrics:** Precision, Recall, F1, Resolution Accuracy, False Clarification Rate, Clarification Relevance.
-- **Baseline:** Zero-shot single-prompt baseline.
-- **Measured Results:** *Pending Milestone 6 run.*
+## 1. Language Evaluation (48-case ambiguity dataset)
 
-## 2. PS2 Evaluation (Smart Inventory Intelligence)
-- **Scenarios:** Normal inventory, stock shortages, duplicate events, malformed events, delivery delays, demand spikes, competing orders, CRD conflicts, supplier lead times, PO proposals, human approvals.
-- **Metrics:** Calculation correctness, duplicate-event accuracy, event processing rate, shortage precision/recall, CRD risk accuracy, projected ship date error, allocation rule compliance, proposal validity, alert latency, and AI groundedness.
-- **Baseline:** Reactive/no-alert FIFO baseline without net-availability or CRD risk lookahead.
-- **Measured Results:** *Pending Milestone 6 run.*
+**Dataset:** `backend/tests/evaluation/ps6_dataset.json` — 48 items (12 each: ambiguous, incomplete, context_dependent, clear). Single-turn.
+
+**Live run — `gemini-3.8-flash`, 2026-11-27:**
+
+| Metric | Value |
+|---|---|
+| Precision | 0.9474 |
+| Recall | 1.0000 |
+| F1 | 0.9730 |
+| Resolution accuracy | 0.7708 |
+| False-clarification rate | 0.0417 |
+| Confusion | TP=36, TN=10, FP=2, FN=0 |
+
+Reproduce: `GET /api/evaluation/ps6?run_now=true`.
+
+## 2. Inventory Evaluation (deterministic scenarios)
+
+**Method:** `run_ps2_evaluation` on seeded demo data; 8 scenario checks + simulated baseline.
+
+| Metric | Value |
+|---|---|
+| Scenario accuracy | 8/8 = 1.0000 |
+| Shortages detected | 4 |
+| CRD-risk orders evaluated | 3 |
+| Baseline | Measured reactive-FIFO simulation (no CRD lookahead) |
+| Baseline accuracy | 0.75 (policy-sensitive subset) |
+| Improvement | +0.25 |
+
+Reproduce: `GET /api/evaluation/ps2?run_now=true`.
+
+## 3. Deterministic fallback
+
+With Gemini unavailable, `local_analyzer` closed-world patterns and `offline_fallback` produce safe clarifications (`analysis_source` = `local`/`offline_fallback`). No fabricated answers.

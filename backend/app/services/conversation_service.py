@@ -10,8 +10,6 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 from app.core.ambiguity_detector import (
-    detect_ambiguity,
-    detect_ambiguity_with_clarification,
     detect_ambiguity_with_clarification_status,
     detect_ambiguity_with_status,
 )
@@ -78,7 +76,7 @@ def start_conversation(
     )
 
     # 3. Run Gemini analysis (with graceful fallback & provenance tracking)
-    analysis, is_ai_fallback, fallback_error = detect_ambiguity_with_status(
+    analysis, is_ai_fallback, fallback_error, analysis_source = detect_ambiguity_with_status(
         db_path, instruction, conversation_id, context_summary
     )
 
@@ -206,6 +204,7 @@ def start_conversation(
         confidence_history=[history_point],
         context_memory=session_memory,
         risk_assessment=risk_assessment,
+        analysis_source=analysis_source,
     )
 
 
@@ -213,6 +212,7 @@ def continue_conversation(
     db_path: str,
     conversation_id: str,
     response: str,
+    max_turns: int = 3,
 ) -> AnalyzeResponse:
     """
     Process a clarification response, re-run analysis with full context,
@@ -253,19 +253,23 @@ def continue_conversation(
     # 4. Force-resolve if max turns exceeded
     is_ai_fallback = False
     fallback_error: Optional[str] = None
-    if enforce_max_turns(turn_count):
+    if enforce_max_turns(turn_count, max_turns):
         analysis = _build_force_resolution(conv["original_instruction"], context_summary)
         is_ai_fallback = True
         fallback_error = "Maximum clarification turns reached; forced deterministic completion."
+        analysis_source = "system"
     else:
-        analysis, is_ai_fallback, fallback_error = (
-            detect_ambiguity_with_clarification_status(
-                db_path,
-                original_instruction=conv["original_instruction"],
-                conversation_history=context_summary,
-                new_response=response,
-                pending_questions=asked_questions,
-            )
+        (
+            analysis,
+            is_ai_fallback,
+            fallback_error,
+            analysis_source,
+        ) = detect_ambiguity_with_clarification_status(
+            db_path,
+            original_instruction=conv["original_instruction"],
+            conversation_history=context_summary,
+            new_response=response,
+            pending_questions=asked_questions,
         )
 
     # 5. Filter duplicate questions
@@ -394,6 +398,7 @@ def continue_conversation(
         confidence_history=updated_history,
         context_memory=session_memory,
         risk_assessment=risk_assessment,
+        analysis_source=analysis_source,
     )
 
 

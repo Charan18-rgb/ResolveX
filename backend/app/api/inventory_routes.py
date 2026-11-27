@@ -1,4 +1,4 @@
-"""PS2 Inventory, Orders, Allocation, and Shortage API routes."""
+""" Inventory, Orders, Allocation, and Shortage API routes."""
 
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,7 +17,7 @@ from app.models.inventory_schemas import (
 )
 from app.models.order_schemas import AllocationRecord, OrderRiskItem
 
-inventory_router = APIRouter(prefix="/api", tags=["PS2 Inventory Intelligence"])
+inventory_router = APIRouter(prefix="/api", tags=["Inventory Intelligence"])
 
 
 @inventory_router.get("/inventory/overview", response_model=InventoryOverviewResponse)

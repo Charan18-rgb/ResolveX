@@ -50,10 +50,17 @@ def decide_proposal(
                 f"Proposal '{proposal_id}' is already in status '{row['status']}'; cannot change."
             )
 
-        conn.execute(
-            "UPDATE purchase_order_proposals SET status = ?, updated_at = ? WHERE id = ?;",
+        # Conditional update guards against a concurrent decision racing
+        # between the status check above and this write.
+        cur = conn.execute(
+            "UPDATE purchase_order_proposals SET status = ?, updated_at = ? "
+            "WHERE id = ? AND status = 'PENDING_APPROVAL';",
             (decision, now, proposal_id),
         )
+        if cur.rowcount == 0:
+            raise ValueError(
+                f"Proposal '{proposal_id}' is no longer pending approval; decision not recorded."
+            )
         conn.execute(
             """
             INSERT INTO approval_records (
@@ -85,8 +92,9 @@ def decide_proposal(
         "decided_role": actor_role,
         "timestamp": now,
         "note": (
-            "PO approved. Supplier contact is now enabled for this proposal."
+            "PO proposal approved and recorded in the audit log. "
+            "No supplier order has been sent yet; external procurement execution is not implemented."
             if decision == "APPROVED"
-            else "PO rejected. No purchase order created and no supplier notified."
+            else "PO proposal rejected. No purchase order created and no supplier notified."
         ),
     }
