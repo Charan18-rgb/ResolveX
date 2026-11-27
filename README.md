@@ -18,6 +18,12 @@ verified answers with live data visualizations.
 - Ambiguous instructions are detected, multiple interpretations are generated,
   and targeted clarification questions preserve conversation context across
   turns (`analyze → clarify → resolve`).
+- Every chat turn — including business-operation answers — is persisted as a
+  conversation, so history can be reopened, renamed or deleted. Message drafts
+  (email/SMS-style cards) are stored server-side per conversation, survive
+  refreshes, and are never sent without an explicit, provider-confirmed action.
+  Draft editing follow-ups ("make it more formal", "change tomorrow to Monday")
+  work across sessions.
 
 ### Inventory intelligence
 - Net availability (`on_hand + incoming − allocated`), safety-stock monitoring,
