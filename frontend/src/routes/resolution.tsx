@@ -13,11 +13,12 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
+import { ExplainabilityLedger } from "@/components/resolvex/ExplainabilityLedger";
 import { InventoryInsightPanel } from "@/components/resolvex/InventoryInsightPanel";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
@@ -40,6 +41,11 @@ function ResolutionPage() {
     uiLanguage,
   } = useResolveX();
   const [copiedType, setCopiedType] = useState<"prompt" | "json" | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const hasInteractiveTurns = optimizerState.conversationHistory.length > 0;
   const displayVerification = finalResolution.verification ?? verificationReport;
@@ -87,7 +93,9 @@ function ResolutionPage() {
         clarityGain: finalResolution.clarityGain,
         completenessScore: displayVerification.completenessScore,
       },
-      verification: displayVerification,
+      verification: mounted
+        ? displayVerification
+        : { ...displayVerification, checkedAt: "ssr-pending" },
       optimizationSummary: displaySummary,
       structuredSpec: finalResolution.structuredSpec,
       appliedDecisions: finalResolution.appliedDecisions,
@@ -153,13 +161,25 @@ function ResolutionPage() {
       {activeAnalysis.backendData?.resolved_intent?.direct_answer && (
         <Card className="border-emerald-500/35 bg-emerald-950/15 space-y-1.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-            Direct Answer (Gemini Live)
+            {activeAnalysis.backendData.inventory_insight
+              ? "Verified Answer (Inventory Database)"
+              : activeAnalysis.backendData.resolved_intent.action === "unit_conversion"
+                ? "Verified Answer (Deterministic Unit Converter)"
+                : activeAnalysis.backendData.resolved_intent.action === "unsupported_request"
+                  ? "Capability Boundary (System Guardrail)"
+                  : "Resolved Answer (AI + Context)"}
           </p>
           <p className="text-sm sm:text-base text-white">
             {activeAnalysis.backendData.resolved_intent.direct_answer}
           </p>
         </Card>
       )}
+
+      <ExplainabilityLedger
+        analysis={activeAnalysis}
+        finalResolution={finalResolution}
+        isVerifiedResolved={isVerifiedResolved}
+      />
 
       {!isVerifiedResolved && (
         <div

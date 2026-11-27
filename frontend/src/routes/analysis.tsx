@@ -14,6 +14,7 @@ import { Badge, type BadgeTone } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
+import { ExplainabilityLedger } from "@/components/resolvex/ExplainabilityLedger";
 import { InventoryInsightPanel } from "@/components/resolvex/InventoryInsightPanel";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { PromptHighlighter } from "@/components/resolvex/PromptHighlighter";
@@ -81,7 +82,7 @@ function AnalysisPage() {
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={activeAnalysis.backendData.status === "RESOLVED" ? "emerald" : "amber"}>
-                Backend Status: {activeAnalysis.backendData.status}
+                Status: {activeAnalysis.backendData.status}
               </Badge>
               {activeAnalysis.backendData.classification && (
                 <Badge tone="cyan">
@@ -89,7 +90,7 @@ function AnalysisPage() {
                 </Badge>
               )}
               <span className="font-mono text-slate-400">
-                Conv ID: {activeAnalysis.backendData.conversation_id.slice(0, 8)}… • Turn{" "}
+                Session: {activeAnalysis.backendData.conversation_id.slice(0, 8)}… • Turn{" "}
                 {activeAnalysis.backendData.turn_count}
               </span>
             </div>
@@ -114,6 +115,8 @@ function AnalysisPage() {
       {activeAnalysis.backendData?.inventory_insight && (
         <InventoryInsightPanel insight={activeAnalysis.backendData.inventory_insight} />
       )}
+
+      <ExplainabilityLedger analysis={activeAnalysis} />
 
       <MultilingualContextBanner
         multilingual={activeAnalysis.multilingual}

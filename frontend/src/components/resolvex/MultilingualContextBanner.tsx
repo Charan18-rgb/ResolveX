@@ -1,4 +1,5 @@
 import { Languages } from "lucide-react";
+import { useResolveX } from "@/context/useResolveX";
 import type {
   LanguageOption,
   MultilingualAnalysisMetadata,
@@ -20,6 +21,11 @@ export function MultilingualContextBanner({
   uiLanguage,
   compact = false,
 }: MultilingualContextBannerProps) {
+  const { backendHealth } = useResolveX();
+  const displayNote = backendHealth?.reachable
+    ? "Connected to ResolveX live language & inventory backend. Original script is preserved alongside semantic normalization."
+    : multilingual.engineNote;
+
   return (
     <Card
       padding={compact ? "sm" : "md"}
@@ -81,7 +87,7 @@ export function MultilingualContextBanner({
         </div>
       )}
 
-      <p className="text-[11px] text-slate-400">{multilingual.engineNote}</p>
+      <p className="text-[11px] text-slate-400">{displayNote}</p>
     </Card>
   );
 }

@@ -47,18 +47,20 @@ def get_alerts(
 @alerts_router.post("/alerts/{alert_id}/acknowledge")
 def acknowledge_alert(alert_id: int, settings: Settings = Depends(get_settings)) -> dict:
     """Mark an alert as acknowledged."""
-    from datetime import datetime, timezone
+    from fastapi import HTTPException
 
     with get_connection(settings.database_path) as conn:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE inventory_alerts SET acknowledged = 1 WHERE id = ?;", (alert_id,)
         )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Alert '{alert_id}' not found.")
     return {"alert_id": alert_id, "acknowledged": True}
 
 
 @alerts_router.get("/briefings")
 def get_briefing(
-    role: str = Query(default="INVENTORY_PLANNER"),
+    role: str | None = Query(default=None),
     x_user_role: str = Header(default="INVENTORY_PLANNER"),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -66,7 +68,7 @@ def get_briefing(
     Return a role-based, data-grounded briefing assembled from deterministic SQLite data.
     Gemini explanation layer is added in Milestone 5. Numbers here are always from Python.
     """
-    effective_role = role.upper() or x_user_role.upper()
+    effective_role = (role or x_user_role or "INVENTORY_PLANNER").upper()
     focus = ROLE_BRIEFING_FOCUS.get(effective_role, ROLE_BRIEFING_FOCUS["ADMIN"])
 
     briefing: dict[str, Any] = {"role": effective_role, "sections": []}

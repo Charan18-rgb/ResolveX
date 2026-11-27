@@ -300,7 +300,7 @@ function InventoryHubPage() {
           <div className="flex items-center gap-2">
             <UserCheck className="h-4 w-4 text-cyan-400" />
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Demo Role Perspective (Sent via X-User-Role Header)
+              Active Workspace Role Perspective
             </span>
           </div>
           <Badge tone="violet">{activeRole}</Badge>
@@ -346,13 +346,30 @@ function InventoryHubPage() {
               <Badge tone={backendBriefing.ai_enriched ? "emerald" : "amber"}>
                 {backendBriefing.ai_enriched ? "AI Enriched (Gemini)" : "Deterministic Summary"}
               </Badge>
-              <Badge tone="cyan">{backendBriefing.data_source}</Badge>
+              <Badge tone="cyan">Live Database Grounded</Badge>
             </div>
           </div>
           {backendBriefing.ai_summary ? (
-            <p className="whitespace-pre-line text-xs sm:text-sm leading-relaxed text-slate-200">
-              {backendBriefing.ai_summary}
-            </p>
+            <div className="space-y-1.5 text-xs sm:text-sm leading-relaxed text-slate-200">
+              {backendBriefing.ai_summary
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line, idx) => {
+                  const isBullet = line.startsWith("* ") || line.startsWith("- ");
+                  const cleaned = (isBullet ? line.slice(2) : line).replace(/\*\*/g, "");
+                  return isBullet ? (
+                    <div key={idx} className="flex items-start gap-2 pl-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                      <span>{cleaned}</span>
+                    </div>
+                  ) : (
+                    <p key={idx} className="font-medium text-white">
+                      {cleaned}
+                    </p>
+                  );
+                })}
+            </div>
           ) : (
             <p className="text-xs text-slate-300">
               {backendBriefing.ai_note ??

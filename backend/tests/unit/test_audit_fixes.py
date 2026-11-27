@@ -132,3 +132,42 @@ def test_resolved_inventory_intent_routes_to_ps2(tmp_path: Path) -> None:
     assert resp.inventory_insight is not None
     assert resp.inventory_insight["domain"] == "inventory"
     assert resp.inventory_insight["inventory_overview"]["total_materials"] == 4
+
+
+def test_briefing_respects_x_user_role_header(tmp_path: Path, monkeypatch) -> None:
+    """GET /api/briefings without ?role= must honor X-User-Role header."""
+    from fastapi.testclient import TestClient
+    from app.config import get_settings
+    from app.main import app
+
+    db_path = str(tmp_path / "briefing_role.db")
+    init_db(db_path)
+    seed_demo_data(db_path)
+    monkeypatch.setenv("DATABASE_PATH", db_path)
+    get_settings.cache_clear()
+    try:
+        client = TestClient(app)
+        with patch("app.services.gemini_service.call_gemini_text", return_value=(None, "offline")):
+            resp = client.get("/api/briefings", headers={"X-User-Role": "PROCUREMENT_MANAGER"})
+        assert resp.status_code == 200
+        assert resp.json()["role"] == "PROCUREMENT_MANAGER"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_acknowledge_missing_alert_returns_404(tmp_path: Path, monkeypatch) -> None:
+    """POST /api/alerts/{id}/acknowledge must return 404 when alert ID does not exist."""
+    from fastapi.testclient import TestClient
+    from app.config import get_settings
+    from app.main import app
+
+    db_path = str(tmp_path / "alerts_404.db")
+    init_db(db_path)
+    monkeypatch.setenv("DATABASE_PATH", db_path)
+    get_settings.cache_clear()
+    try:
+        client = TestClient(app)
+        resp = client.post("/api/alerts/999999/acknowledge")
+        assert resp.status_code == 404
+    finally:
+        get_settings.cache_clear()
