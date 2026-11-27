@@ -6,7 +6,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.alerts_routes import alerts_router
 from app.api.inventory_routes import inventory_router
+from app.api.purchase_order_routes import procurement_router
 from app.api.routes import router
 from app.config import get_settings
 from app.database.connection import init_db
@@ -73,6 +75,8 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
     app.include_router(inventory_router)
+    app.include_router(procurement_router)
+    app.include_router(alerts_router)
     return app
 
 
