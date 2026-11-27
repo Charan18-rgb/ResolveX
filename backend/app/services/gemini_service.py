@@ -32,7 +32,7 @@ def _get_client() -> genai.Client:
 
 
 @tenacity.retry(
-    retry=tenacity.retry_if_exception_type((Exception,)),
+    retry=tenacity.retry_if_exception(lambda exc: not isinstance(exc, RuntimeError)),
     stop=tenacity.stop_after_attempt(2),
     wait=tenacity.wait_fixed(1),
     reraise=True,

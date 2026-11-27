@@ -2,9 +2,11 @@
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.alerts_routes import alerts_router
 from app.api.analysis_routes import analysis_router
@@ -49,6 +51,28 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(
+        _request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
+        """Return HTTP errors using the unified ErrorResponse envelope."""
+        code_map = {
+            400: "BAD_REQUEST",
+            401: "UNAUTHORIZED",
+            403: "FORBIDDEN",
+            404: "NOT_FOUND",
+            409: "CONFLICT",
+            422: "VALIDATION_ERROR",
+        }
+        payload = ErrorResponse(
+            error=ErrorDetail(
+                code=code_map.get(exc.status_code, f"HTTP_{exc.status_code}"),
+                message=str(exc.detail),
+                details=None,
+            )
+        )
+        return JSONResponse(status_code=exc.status_code, content=payload.model_dump())
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         _request: Request, exc: RequestValidationError
@@ -58,7 +82,7 @@ def create_app() -> FastAPI:
             error=ErrorDetail(
                 code="VALIDATION_ERROR",
                 message="Request validation failed.",
-                details=exc.errors(),
+                details=jsonable_encoder(exc.errors()),
             )
         )
         return JSONResponse(status_code=422, content=payload.model_dump())

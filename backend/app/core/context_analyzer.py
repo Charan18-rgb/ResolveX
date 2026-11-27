@@ -20,10 +20,11 @@ def build_context_summary(
     """
     with get_connection(db_path) as conn:
         conv_row = conn.execute(
-            "SELECT turn_count FROM conversations WHERE id = ?;",
+            "SELECT turn_count, initial_context FROM conversations WHERE id = ?;",
             (conversation_id,),
         ).fetchone()
         turn_count: int = int(conv_row["turn_count"]) if conv_row else 1
+        initial_context: Optional[str] = conv_row["initial_context"] if conv_row else None
 
         msg_rows = conn.execute(
             """
@@ -47,6 +48,8 @@ def build_context_summary(
 
     # Build human-readable turn history
     lines: list[str] = []
+    if initial_context and initial_context.strip():
+        lines.append(f"Initial Context: {initial_context.strip()}")
     for row in msg_rows:
         prefix = "User" if row["role"] == "user" else "ResolveX"
         lines.append(f"[Turn {row['turn_number']}] {prefix}: {row['content']}")

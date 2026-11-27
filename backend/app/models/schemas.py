@@ -93,4 +93,5 @@ class AnalyzeResponse(BaseModel):
     missing_required_info: list[str] = Field(default_factory=list)
     clarification_questions: list[str] = Field(default_factory=list)
     resolved_intent: Optional[ResolvedIntentPayload] = None
+    inventory_insight: Optional[dict[str, Any]] = None
     turn_count: int = Field(..., ge=1)

@@ -14,7 +14,9 @@ from app.core.clarification_engine import (
 )
 from app.core.context_analyzer import build_context_summary
 from app.core.intent_resolver import validate_resolved_intent, build_fallback_resolved_intent
+from app.core.task_router import classify_intent_domain, route_to_inventory
 from app.database import operations as db_ops
+from app.models.ai_schemas import ResolvedIntentOutput
 from app.models.schemas import AnalyzeResponse, InterpretationItem, ResolvedIntentPayload
 
 
@@ -96,6 +98,8 @@ def start_conversation(
         turn_count=turn_count,
     )
 
+    inventory_insight = _maybe_route_inventory(db_path, resolved_intent_payload)
+
     return AnalyzeResponse(
         conversation_id=conversation_id,
         status=new_status,
@@ -109,6 +113,7 @@ def start_conversation(
         missing_required_info=analysis.missing_required_info,
         clarification_questions=analysis.clarification_questions,
         resolved_intent=resolved_intent_payload,
+        inventory_insight=inventory_insight,
         turn_count=turn_count,
     )
 
@@ -212,6 +217,8 @@ def continue_conversation(
         turn_count=turn_count,
     )
 
+    inventory_insight = _maybe_route_inventory(db_path, resolved_intent_payload)
+
     return AnalyzeResponse(
         conversation_id=conversation_id,
         status=new_status,
@@ -225,6 +232,7 @@ def continue_conversation(
         missing_required_info=analysis.missing_required_info,
         clarification_questions=analysis.clarification_questions,
         resolved_intent=resolved_intent_payload,
+        inventory_insight=inventory_insight,
         turn_count=turn_count,
     )
 
@@ -272,8 +280,30 @@ def get_resolved_intent(
         missing_required_info=[],
         clarification_questions=[],
         resolved_intent=resolved_payload,
+        inventory_insight=_maybe_route_inventory(db_path, resolved_payload),
         turn_count=int(conv["turn_count"]),
     )
+
+
+def _maybe_route_inventory(
+    db_path: str,
+    resolved_payload: Optional[ResolvedIntentPayload],
+) -> Optional[dict[str, Any]]:
+    """Attach deterministic PS2 inventory insight when a resolved intent targets inventory."""
+    if resolved_payload is None:
+        return None
+    intent_obj = ResolvedIntentOutput(
+        action=resolved_payload.action,
+        parameters=resolved_payload.parameters,
+        resolved_instruction=resolved_payload.resolved_instruction,
+        direct_answer=resolved_payload.direct_answer,
+    )
+    if classify_intent_domain(intent_obj) != "inventory":
+        return None
+    try:
+        return route_to_inventory(db_path, intent_obj)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------

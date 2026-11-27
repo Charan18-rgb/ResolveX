@@ -40,7 +40,7 @@ def approve_proposal(
     proposal_id: str,
     body: ProposalDecisionRequest,
     x_user_name: str = Header(default="system"),
-    x_user_role: str = Header(default="ADMIN"),
+    x_user_role: str = Header(default="VIEWER"),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
@@ -69,7 +69,7 @@ def reject_proposal(
     proposal_id: str,
     body: ProposalDecisionRequest,
     x_user_name: str = Header(default="system"),
-    x_user_role: str = Header(default="ADMIN"),
+    x_user_role: str = Header(default="VIEWER"),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """

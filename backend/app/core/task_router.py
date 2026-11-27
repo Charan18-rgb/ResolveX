@@ -68,8 +68,8 @@ def route_to_inventory(db_path: str, resolved_intent: ResolvedIntentOutput) -> d
     return {
         "domain": "inventory",
         "intent_action": resolved_intent.action,
-        "inventory_overview": overview,
+        "inventory_overview": overview.model_dump(),
         "shortages": shortages,
-        "order_risks": risks,
+        "order_risks": [r.model_dump() for r in risks],
         "note": "Data sourced deterministically from ResolveX inventory database.",
     }
