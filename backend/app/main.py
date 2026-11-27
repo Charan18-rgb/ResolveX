@@ -1,0 +1,71 @@
+"""ResolveX FastAPI application entrypoint."""
+
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api.routes import router
+from app.config import get_settings
+from app.database.connection import init_db
+from app.models.schemas import ErrorDetail, ErrorResponse
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Initialize database on application startup."""
+    settings = get_settings()
+    init_db(settings.database_path)
+    yield
+
+
+def create_app() -> FastAPI:
+    """Build and configure the FastAPI application."""
+    settings = get_settings()
+    app = FastAPI(
+        title=settings.app_name,
+        version="0.1.0",
+        description="AI-powered Natural Language Ambiguity Identification and Resolution System",
+        lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        _request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Return validation errors using the unified ErrorResponse envelope."""
+        payload = ErrorResponse(
+            error=ErrorDetail(
+                code="VALIDATION_ERROR",
+                message="Request validation failed.",
+                details=exc.errors(),
+            )
+        )
+        return JSONResponse(status_code=422, content=payload.model_dump())
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(_request: Request, _exc: Exception) -> JSONResponse:
+        """Catch-all handler that never leaks internal stack traces or secrets."""
+        payload = ErrorResponse(
+            error=ErrorDetail(
+                code="INTERNAL_SERVER_ERROR",
+                message="An unexpected internal error occurred.",
+                details=None,
+            )
+        )
+        return JSONResponse(status_code=500, content=payload.model_dump())
+
+    app.include_router(router)
+    return app
+
+
+app = create_app()
