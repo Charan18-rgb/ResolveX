@@ -30,3 +30,12 @@ Session start state: HEAD `2bbff1d` (pushed, remote verified), clean tree, backe
 
 - Verified repo state, servers healthy, clean tree.
 - Next: browser-verify chat history UI, README email config docs, final commit.
+
+## Phase 2 — chat send deadlock fix + mobile history (commit pending)
+
+- ROOT CAUSE FOUND: `sendingRef` reset lived in a `finally` attached only to the fallback-analysis try. When `/api/ops/query` returned a card, the early `return` skipped it → `sendingRef` stuck `true` → every later send silently dropped (input never cleared, no fetch). This was a REAL code bug, not HMR — reproduced exactly: first message worked, all subsequent sends dead.
+- FIX: wrapped whole send body in outer try/finally resetting `sendingRef`. Browser-verified: two consecutive sends both fired `/api/ops/query` and rendered.
+- Mobile history: sidebar is `hidden md:flex` → phones had NO history access. Added `HistoryItems` shared component + mobile slide-over drawer + History/New buttons in the mobile strip. Rename/delete buttons now always visible (touch-friendly).
+- Browser-verified: history drawer lists real conversations; opening "Send the report to Rahul." restored title + ordered messages; delete via confirm dialog removed it (API confirms gone).
+- Note: ops-query business cards do NOT create backend conversations (only /api/analyze NLU path persists) — history shows NLU conversations; documented limitation.
+- Tests: vitest 26/26, tsc 0 errors.

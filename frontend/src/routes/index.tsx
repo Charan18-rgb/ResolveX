@@ -37,6 +37,71 @@ const WELCOME =
 let msgSeq = 0;
 const nextId = () => `m${++msgSeq}-${Date.now()}`;
 
+interface HistoryItem { id: string; title: string }
+
+function HistoryItems(props: {
+  history: HistoryItem[];
+  historyLoading: boolean;
+  historyError: string | null;
+  activeId: string | null;
+  openingId: string | null;
+  onOpen: (h: HistoryItem) => void;
+  onRename: (h: HistoryItem) => void;
+  onDelete: (h: HistoryItem) => void;
+}) {
+  const { history, historyLoading, historyError, activeId, openingId, onOpen, onRename, onDelete } = props;
+  if (historyLoading) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-2 text-xs text-slate-500">
+        <Loader2 size={12} className="animate-spin" /> Loading…
+      </div>
+    );
+  }
+  if (historyError) return <div className="px-2 py-2 text-xs text-rose-400">{historyError}</div>;
+  if (history.length === 0) return <p className="px-2 text-xs text-slate-500">No past conversations yet.</p>;
+  return (
+    <>
+      {history.slice(0, 30).map((h) => (
+        <div
+          key={h.id}
+          className={`group mb-1 flex items-center gap-1 rounded-md px-1 py-1 ${
+            activeId === h.id ? "bg-slate-800" : "hover:bg-slate-800"
+          }`}
+        >
+          <button
+            onClick={() => onOpen(h)}
+            disabled={openingId === h.id}
+            className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1 text-left text-xs text-slate-300"
+          >
+            {openingId === h.id ? (
+              <Loader2 size={12} className="shrink-0 animate-spin text-cyan-400" />
+            ) : (
+              <MessageSquare size={12} className="shrink-0 text-slate-500" />
+            )}
+            <span className="truncate">{h.title}</span>
+          </button>
+          <button
+            onClick={() => onRename(h)}
+            className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-700 hover:text-slate-200"
+            title="Rename"
+            aria-label={`Rename ${h.title}`}
+          >
+            <Pencil size={11} />
+          </button>
+          <button
+            onClick={() => onDelete(h)}
+            className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-700 hover:text-rose-400"
+            title="Delete"
+            aria-label={`Delete ${h.title}`}
+          >
+            <Trash2 size={11} />
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function HomePage() {
   const { settings, activeRole } = useResolveX();
   const [messages, setMessages] = useState<ChatMsg[]>([
@@ -48,6 +113,7 @@ function HomePage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [activeConv, setActiveConv] = useState<{ id: string; title: string } | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pendingClarify = useRef<{ conversationId: string } | null>(null);
@@ -259,55 +325,16 @@ function HomePage() {
         </button>
         <div className="flex-1 overflow-y-auto px-3">
           <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">History</div>
-          {historyLoading && (
-            <div className="flex items-center gap-2 px-2 py-2 text-xs text-slate-500">
-              <Loader2 size={12} className="animate-spin" /> Loading…
-            </div>
-          )}
-          {!historyLoading && historyError && (
-            <div className="px-2 py-2 text-xs text-rose-400">{historyError}</div>
-          )}
-          {!historyLoading && !historyError && history.length === 0 && (
-            <p className="px-2 text-xs text-slate-500">No past conversations yet.</p>
-          )}
-          {!historyLoading &&
-            history.slice(0, 30).map((h) => (
-              <div
-                key={h.id}
-                className={`group mb-1 flex items-center gap-1 rounded-md px-1 py-1 ${
-                  activeConv?.id === h.id ? "bg-slate-800" : "hover:bg-slate-800"
-                }`}
-              >
-                <button
-                  onClick={() => void openConversation(h)}
-                  disabled={openingId === h.id}
-                  className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1 text-left text-xs text-slate-300"
-                >
-                  {openingId === h.id ? (
-                    <Loader2 size={12} className="shrink-0 animate-spin text-cyan-400" />
-                  ) : (
-                    <MessageSquare size={12} className="shrink-0 text-slate-500" />
-                  )}
-                  <span className="truncate">{h.title}</span>
-                </button>
-                <button
-                  onClick={() => void renameConversation(h)}
-                  className="hidden shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-slate-200 group-hover:block"
-                  title="Rename"
-                  aria-label={`Rename ${h.title}`}
-                >
-                  <Pencil size={11} />
-                </button>
-                <button
-                  onClick={() => void deleteConversation(h)}
-                  className="hidden shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-rose-400 group-hover:block"
-                  title="Delete"
-                  aria-label={`Delete ${h.title}`}
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            ))}
+          <HistoryItems
+            history={history}
+            historyLoading={historyLoading}
+            historyError={historyError}
+            activeId={activeConv?.id ?? null}
+            openingId={openingId}
+            onOpen={(h) => void openConversation(h)}
+            onRename={(h) => void renameConversation(h)}
+            onDelete={(h) => void deleteConversation(h)}
+          />
         </div>
         <nav className="border-t border-slate-800 p-3">
           {navItems.map((item) => (
@@ -329,7 +356,19 @@ function HomePage() {
       <main className="flex min-w-0 flex-1 flex-col">
         {/* Mobile nav strip (sidebar hidden below md) */}
         <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-900 px-3 py-2 md:hidden">
-          <span className="mr-2 text-sm font-bold text-white">ResolveX</span>
+          <span className="mr-1 shrink-0 text-sm font-bold text-white">ResolveX</span>
+          <button
+            onClick={() => setMobileHistoryOpen(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+          >
+            <MessageSquare size={14} /> History
+          </button>
+          <button
+            onClick={newChat}
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white"
+          >
+            <Plus size={14} /> New
+          </button>
           {navItems.map((item) => (
             <Link key={item.to} to={item.to} className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white">
               <item.icon size={14} /> {item.label}
@@ -415,6 +454,39 @@ function HomePage() {
           </div>
         </div>
       </main>
+
+      {/* Mobile history drawer */}
+      {mobileHistoryOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-slate-950/50" onClick={() => setMobileHistoryOpen(false)} />
+          <div className="absolute inset-y-0 left-0 flex w-72 flex-col bg-slate-900 text-slate-200 shadow-xl">
+            <div className="flex items-center justify-between px-4 py-4">
+              <span className="text-sm font-bold text-white">History</span>
+              <button onClick={() => setMobileHistoryOpen(false)} className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Close history">
+                ✕
+              </button>
+            </div>
+            <button
+              onClick={() => { newChat(); setMobileHistoryOpen(false); }}
+              className="mx-4 mb-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+            >
+              <Plus size={16} /> New conversation
+            </button>
+            <div className="flex-1 overflow-y-auto px-3">
+              <HistoryItems
+                history={history}
+                historyLoading={historyLoading}
+                historyError={historyError}
+                activeId={activeConv?.id ?? null}
+                openingId={openingId}
+                onOpen={(h) => { setMobileHistoryOpen(false); void openConversation(h); }}
+                onRename={(h) => void renameConversation(h)}
+                onDelete={(h) => void deleteConversation(h)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
