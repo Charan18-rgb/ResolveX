@@ -308,7 +308,9 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
             "data": draft,
         }
 
-    # New communication request — structured NLU (Gemini + deterministic fallback)
+    # New communication request — structured NLU (Gemini + deterministic fallback).
+    # Genuinely ambiguous intents (no identifiable recipient, unnamed possessive
+    # recipient) fall through to the main clarification pipeline via "help".
     intent = parse_communication(question, context, use_gemini=True)
 
     if intent.requires_clarification and not intent.recipient_name:

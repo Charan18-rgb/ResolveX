@@ -1,66 +1,682 @@
 [
-  {"id": "amb-001", "instruction": "Send the report to Rahul.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-002", "instruction": "Call him back when you can.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-003", "instruction": "Process the pending items.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-004", "instruction": "Move it to the right place.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-005", "instruction": "Update the document.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-006", "instruction": "Fix the issue on the server.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-007", "instruction": "Make a note of it.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-008", "instruction": "Order some more from the supplier.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-009", "instruction": "Transfer the file to the other team.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-010", "instruction": "Delete the old records.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-011", "instruction": "Block their access.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-  {"id": "amb-012", "instruction": "Approve the request.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous"},
-
-  {"id": "inc-001", "instruction": "Book a table for tomorrow evening.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-002", "instruction": "Schedule a meeting.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-003", "instruction": "Send an email.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-004", "instruction": "Order the product.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-005", "instruction": "Create a new account.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-006", "instruction": "Set up a reminder.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-007", "instruction": "Generate the report.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-008", "instruction": "Make a payment.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-009", "instruction": "Assign the task.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-010", "instruction": "Track the shipment.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-011", "instruction": "Add a user.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-  {"id": "inc-012", "instruction": "Configure the settings.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete"},
-
-  {"id": "ctx-001", "instruction": "Yes, do that one.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-002", "instruction": "Same as before but for today.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-003", "instruction": "Use the same settings as last time.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-004", "instruction": "Do the opposite.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-005", "instruction": "Repeat the process.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-006", "instruction": "Change it back.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-007", "instruction": "Skip the second step.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-008", "instruction": "Apply the same discount again.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-009", "instruction": "Reply with the standard response.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-010", "instruction": "Use the previous file.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-011", "instruction": "Let them know about the update.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-  {"id": "ctx-012", "instruction": "Continue from where we left off.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent"},
-
-  {"id": "clr-001", "instruction": "Convert 100 kilometers to miles.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-002", "instruction": "What is the capital of France?", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-003", "instruction": "Send an email to alice@example.com with subject Hello World.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-004", "instruction": "Create a folder named Reports in the Documents directory.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-005", "instruction": "Translate good morning to Spanish.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-006", "instruction": "Set an alarm for 7:30 AM tomorrow.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-007", "instruction": "Calculate 15 percent of 240.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-008", "instruction": "Open the file invoice_march.pdf.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-009", "instruction": "List all files in the current directory.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-010", "instruction": "Restart the application server.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-011", "instruction": "Add 5 and 7.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-  {"id": "clr-012", "instruction": "Show me the current inventory overview.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear"},
-
-  {"id": "adv-lex-001", "instruction": "Apply the standard charge to the enterprise client profile before closing.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "lexical", "expected_ambiguities": ["lexical", "underspecification"], "tags": ["lexical"], "is_adversarial": true},
-  {"id": "adv-ref-001", "instruction": "When the procurement lead emailed the warehouse supervisor about the delayed shipment, tell him to update his sheet before they escalate it.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "referential", "expected_ambiguities": ["referential"], "tags": ["referential", "long_sentence", "multi_ambiguity"], "is_adversarial": true},
-  {"id": "adv-str-001", "instruction": "Schedule urgent inspection for orders flagged by QA with delayed sensors from Bengaluru or Chennaihub.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "structural", "expected_ambiguities": ["structural", "scope"], "tags": ["structural"], "is_adversarial": true},
-  {"id": "adv-ctx-001", "instruction": "Trigger the usual emergency override on that line just like last quarter and hold the rest.", "expected_classification": "context_dependent", "expected_needs_clarification": true, "category": "context_dependent", "ambiguity_category": "contextual", "expected_ambiguities": ["contextual", "referential"], "tags": ["contextual", "missing_context"], "is_adversarial": true},
-  {"id": "adv-sem-001", "instruction": "Every regional planner must verify a critical supplier backup before dispatch.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "semantic", "expected_ambiguities": ["semantic", "scope"], "tags": ["semantic"], "is_adversarial": true},
-  {"id": "adv-und-001", "instruction": "Fix it quickly and optimize the output properly.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete", "ambiguity_category": "underspecification", "expected_ambiguities": ["underspecification", "lexical", "referential"], "tags": ["underspecification", "missing_context"], "is_adversarial": true},
-  {"id": "adv-long-001", "instruction": "During tomorrow's maintenance window, migrate active sessions from the legacy auth cluster to the backup region if errors spike above normal, restrict risky accounts, and notify the stakeholders soon.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "lexical", "expected_ambiguities": ["lexical", "contextual", "underspecification"], "tags": ["long_sentence", "multi_ambiguity", "multi_turn"], "follow_up_clarification": "Migrate only oauth_sessions older than 24h from cluster us-east-1 to eu-west-1 during 02:00 UTC, suspend accounts failing MFA, and notify secops@acme.com.", "is_adversarial": true},
-  {"id": "adv-miss-001", "instruction": "Approve the exception and expedite it now.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete", "ambiguity_category": "underspecification", "expected_ambiguities": ["referential", "underspecification"], "tags": ["missing_context"], "is_adversarial": true},
-  {"id": "adv-con-001", "instruction": "Deploy only to staging and immediately roll out to production next week while keeping sessions active and suspended.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "contextual", "expected_ambiguities": ["contextual", "semantic"], "tags": ["contradictory", "multi_ambiguity"], "is_contradictory": true, "is_adversarial": true},
-  {"id": "adv-multi-001", "instruction": "Forward the Q3 report to Rahul.", "expected_classification": "ambiguous", "expected_needs_clarification": true, "category": "ambiguous", "ambiguity_category": "referential", "expected_ambiguities": ["referential", "underspecification"], "tags": ["referential", "multi_turn"], "follow_up_clarification": "Forward Q3_Finance_Report.pdf to rahul.sharma@acme.com today.", "is_adversarial": true},
-  {"id": "adv-ps2-001", "instruction": "Reallocate remaining chip stock to the urgent customer order and draft a purchase order soon.", "expected_classification": "incomplete", "expected_needs_clarification": true, "category": "incomplete", "ambiguity_category": "contextual", "expected_ambiguities": ["contextual", "underspecification"], "tags": ["ps2_inventory", "multi_turn", "multi_ambiguity"], "follow_up_clarification": "Prioritize MAT-CHIP allocation for ORD-1002 and draft PO for 500 units from Alpha Semiconductors.", "is_adversarial": true},
-  {"id": "adv-clr-001", "instruction": "Export read-only CSV metrics for ORD-1001 and MAT-CHIP from warehouse BLR-Hub-01 on 2026-11-27 to analytics@acme.com without mutating allocations.", "expected_classification": "clear", "expected_needs_clarification": false, "category": "clear", "ambiguity_category": "none", "expected_ambiguities": [], "tags": ["clear_control", "long_sentence", "ps2_inventory"], "is_adversarial": true}
+ {
+  "id": "amb-001",
+  "instruction": "Send the report to Rahul.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-002",
+  "instruction": "Call him back when you can.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-003",
+  "instruction": "Process the pending items.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-004",
+  "instruction": "Move it to the right place.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-005",
+  "instruction": "Update the document.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-006",
+  "instruction": "Fix the issue on the server.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-007",
+  "instruction": "Make a note of it.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-008",
+  "instruction": "Order some more from the supplier.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-009",
+  "instruction": "Transfer the file to the other team.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-010",
+  "instruction": "Delete the old records.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-011",
+  "instruction": "Block their access.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "amb-012",
+  "instruction": "Approve the request.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous"
+ },
+ {
+  "id": "inc-001",
+  "instruction": "Book a table for tomorrow evening.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-002",
+  "instruction": "Schedule a meeting.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-003",
+  "instruction": "Send an email.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-004",
+  "instruction": "Order the product.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-005",
+  "instruction": "Create a new account.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-006",
+  "instruction": "Set up a reminder.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-007",
+  "instruction": "Generate the report.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-008",
+  "instruction": "Make a payment.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-009",
+  "instruction": "Assign the task.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-010",
+  "instruction": "Track the shipment.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-011",
+  "instruction": "Add a user.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "inc-012",
+  "instruction": "Configure the settings.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete"
+ },
+ {
+  "id": "ctx-001",
+  "instruction": "Yes, do that one.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-002",
+  "instruction": "Same as before but for today.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-003",
+  "instruction": "Use the same settings as last time.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-004",
+  "instruction": "Do the opposite.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-005",
+  "instruction": "Repeat the process.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-006",
+  "instruction": "Change it back.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-007",
+  "instruction": "Skip the second step.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-008",
+  "instruction": "Apply the same discount again.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-009",
+  "instruction": "Reply with the standard response.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-010",
+  "instruction": "Use the previous file.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-011",
+  "instruction": "Let them know about the update.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "ctx-012",
+  "instruction": "Continue from where we left off.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent"
+ },
+ {
+  "id": "clr-001",
+  "instruction": "Convert 100 kilometers to miles.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-002",
+  "instruction": "What is the capital of France?",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-003",
+  "instruction": "Send an email to alice@example.com with subject Hello World.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-004",
+  "instruction": "Create a folder named Reports in the Documents directory.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-005",
+  "instruction": "Translate good morning to Spanish.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-006",
+  "instruction": "Set an alarm for 7:30 AM tomorrow.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-007",
+  "instruction": "Calculate 15 percent of 240.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-008",
+  "instruction": "Open the file invoice_march.pdf.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-009",
+  "instruction": "List all files in the current directory.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-010",
+  "instruction": "Restart the application server.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-011",
+  "instruction": "Add 5 and 7.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "clr-012",
+  "instruction": "Show me the current inventory overview.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear"
+ },
+ {
+  "id": "adv-lex-001",
+  "instruction": "Apply the standard charge to the enterprise client profile before closing.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "lexical",
+  "expected_ambiguities": [
+   "lexical",
+   "underspecification"
+  ],
+  "tags": [
+   "lexical"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-ref-001",
+  "instruction": "When the procurement lead emailed the warehouse supervisor about the delayed shipment, tell him to update his sheet before they escalate it.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "referential",
+  "expected_ambiguities": [
+   "referential"
+  ],
+  "tags": [
+   "referential",
+   "long_sentence",
+   "multi_ambiguity"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-str-001",
+  "instruction": "Schedule urgent inspection for orders flagged by QA with delayed sensors from Bengaluru or Chennaihub.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "structural",
+  "expected_ambiguities": [
+   "structural",
+   "scope"
+  ],
+  "tags": [
+   "structural"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-ctx-001",
+  "instruction": "Trigger the usual emergency override on that line just like last quarter and hold the rest.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": true,
+  "category": "context_dependent",
+  "ambiguity_category": "contextual",
+  "expected_ambiguities": [
+   "contextual",
+   "referential"
+  ],
+  "tags": [
+   "contextual",
+   "missing_context"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-sem-001",
+  "instruction": "Every regional planner must verify a critical supplier backup before dispatch.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "semantic",
+  "expected_ambiguities": [
+   "semantic",
+   "scope"
+  ],
+  "tags": [
+   "semantic"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-und-001",
+  "instruction": "Fix it quickly and optimize the output properly.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete",
+  "ambiguity_category": "underspecification",
+  "expected_ambiguities": [
+   "underspecification",
+   "lexical",
+   "referential"
+  ],
+  "tags": [
+   "underspecification",
+   "missing_context"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-long-001",
+  "instruction": "During tomorrow's maintenance window, migrate active sessions from the legacy auth cluster to the backup region if errors spike above normal, restrict risky accounts, and notify the stakeholders soon.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "lexical",
+  "expected_ambiguities": [
+   "lexical",
+   "contextual",
+   "underspecification"
+  ],
+  "tags": [
+   "long_sentence",
+   "multi_ambiguity",
+   "multi_turn"
+  ],
+  "follow_up_clarification": "Migrate only oauth_sessions older than 24h from cluster us-east-1 to eu-west-1 during 02:00 UTC, suspend accounts failing MFA, and notify secops@acme.com.",
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-miss-001",
+  "instruction": "Approve the exception and expedite it now.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete",
+  "ambiguity_category": "underspecification",
+  "expected_ambiguities": [
+   "referential",
+   "underspecification"
+  ],
+  "tags": [
+   "missing_context"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-con-001",
+  "instruction": "Deploy only to staging and immediately roll out to production next week while keeping sessions active and suspended.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "contextual",
+  "expected_ambiguities": [
+   "contextual",
+   "semantic"
+  ],
+  "tags": [
+   "contradictory",
+   "multi_ambiguity"
+  ],
+  "is_contradictory": true,
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-multi-001",
+  "instruction": "Forward the Q3 report to Rahul.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "referential",
+  "expected_ambiguities": [
+   "referential",
+   "underspecification"
+  ],
+  "tags": [
+   "referential",
+   "multi_turn"
+  ],
+  "follow_up_clarification": "Forward Q3_Finance_Report.pdf to rahul.sharma@acme.com today.",
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-ps2-001",
+  "instruction": "Reallocate remaining chip stock to the urgent customer order and draft a purchase order soon.",
+  "expected_classification": "incomplete",
+  "expected_needs_clarification": true,
+  "category": "incomplete",
+  "ambiguity_category": "contextual",
+  "expected_ambiguities": [
+   "contextual",
+   "underspecification"
+  ],
+  "tags": [
+   "ps2_inventory",
+   "multi_turn",
+   "multi_ambiguity"
+  ],
+  "follow_up_clarification": "Prioritize MAT-CHIP allocation for ORD-1002 and draft PO for 500 units from Alpha Semiconductors.",
+  "is_adversarial": true
+ },
+ {
+  "id": "adv-clr-001",
+  "instruction": "Export read-only CSV metrics for ORD-1001 and MAT-CHIP from warehouse BLR-Hub-01 on 2026-11-27 to analytics@acme.com without mutating allocations.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "ambiguity_category": "none",
+  "expected_ambiguities": [],
+  "tags": [
+   "clear_control",
+   "long_sentence",
+   "ps2_inventory"
+  ],
+  "is_adversarial": true
+ },
+ {
+  "id": "nlu-comm-001",
+  "instruction": "email my classmate Charan that i am not attending tomorrow's class",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "communication",
+   "relationship",
+   "informal"
+  ]
+ },
+ {
+  "id": "nlu-comm-002",
+  "instruction": "Email Charan's classmate that I will be absent tomorrow.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "missing_recipient",
+  "tags": [
+   "communication",
+   "possessive"
+  ]
+ },
+ {
+  "id": "nlu-comm-003",
+  "instruction": "Message Ravi that tomorrow is the last date for payment for stock.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "recipient_identity",
+  "tags": [
+   "communication",
+   "payment"
+  ]
+ },
+ {
+  "id": "nlu-comm-004",
+  "instruction": "Remind my manager about the pending invoice.",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "missing_name",
+  "tags": [
+   "communication",
+   "relationship"
+  ]
+ },
+ {
+  "id": "nlu-comm-005",
+  "instruction": "Send a payment reminder to Ravi Kumar.",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "communication",
+   "full_name"
+  ]
+ },
+ {
+  "id": "nlu-pron-001",
+  "instruction": "Make it more formal.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": false,
+  "category": "context_dependent",
+  "tags": [
+   "pronoun",
+   "follow_up"
+  ]
+ },
+ {
+  "id": "nlu-pron-002",
+  "instruction": "Tell him I will share the notes later.",
+  "expected_classification": "context_dependent",
+  "expected_needs_clarification": false,
+  "category": "context_dependent",
+  "tags": [
+   "pronoun",
+   "follow_up"
+  ]
+ },
+ {
+  "id": "nlu-miss-001",
+  "instruction": "email my class Charan that i am not comming to colege tommorow",
+  "expected_classification": "ambiguous",
+  "expected_needs_clarification": true,
+  "category": "ambiguous",
+  "ambiguity_category": "relationship_ambiguity",
+  "tags": [
+   "communication",
+   "spelling",
+   "informal"
+  ]
+ },
+ {
+  "id": "nlu-inv-001",
+  "instruction": "Do we have enough copper wire for tomorrow?",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "inventory",
+   "quantity"
+  ]
+ },
+ {
+  "id": "nlu-inv-002",
+  "instruction": "How much stock is actually available after reservations?",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "inventory",
+   "availability"
+  ]
+ },
+ {
+  "id": "nlu-wh-001",
+  "instruction": "Where did we keep the titanium bolts?",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "warehouse",
+   "location"
+  ]
+ },
+ {
+  "id": "nlu-sup-001",
+  "instruction": "Which supplier is causing the most delays?",
+  "expected_classification": "clear",
+  "expected_needs_clarification": false,
+  "category": "clear",
+  "tags": [
+   "supplier",
+   "ranking"
+  ]
+ }
 ]
