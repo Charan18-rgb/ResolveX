@@ -1,7 +1,7 @@
 """Application configuration loaded from environment variables and .env."""
 
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +34,15 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173"
     )
 
+    @field_validator("gemini_model", "database_path")
+    @classmethod
+    def must_not_be_blank(cls, value: str) -> str:
+        """Ensure critical configuration strings are non-empty."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Configuration value must not be empty.")
+        return stripped
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS origins into a clean list."""
@@ -44,6 +53,15 @@ class Settings(BaseSettings):
         """Return True if a non-placeholder Gemini API key is configured."""
         key = self.gemini_api_key.strip()
         return bool(key) and key != "your_gemini_api_key_here"
+
+    def require_gemini_api_key(self) -> str:
+        """Return the configured Gemini API key or raise a clear configuration error."""
+        if not self.is_ai_configured:
+            raise ValueError(
+                "GEMINI_API_KEY is missing or using the placeholder value. "
+                "Set a valid GEMINI_API_KEY in backend/.env or environment variables."
+            )
+        return self.gemini_api_key.strip()
 
 
 @lru_cache
