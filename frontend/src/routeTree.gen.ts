@@ -14,6 +14,7 @@ import { Route as AnalysisRouteImport } from './routes/analysis'
 import { Route as ClarificationRouteImport } from './routes/clarification'
 import { Route as EvaluationRouteImport } from './routes/evaluation'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
+import { Route as IntegrationsRouteImport } from './routes/integrations'
 import { Route as InterpretationsRouteImport } from './routes/interpretations'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as OrdersRouteImport } from './routes/orders'
@@ -47,6 +48,11 @@ const EvaluationRoute = EvaluationRouteImport.update({
 const HowItWorksRoute = HowItWorksRouteImport.update({
   id: '/how-it-works',
   path: '/how-it-works',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IntegrationsRoute = IntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InterpretationsRoute = InterpretationsRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/clarification': typeof ClarificationRoute
   '/evaluation': typeof EvaluationRoute
   '/how-it-works': typeof HowItWorksRoute
+  '/integrations': typeof IntegrationsRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
   '/orders': typeof OrdersRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/clarification': typeof ClarificationRoute
   '/evaluation': typeof EvaluationRoute
   '/how-it-works': typeof HowItWorksRoute
+  '/integrations': typeof IntegrationsRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
   '/orders': typeof OrdersRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/clarification': typeof ClarificationRoute
   '/evaluation': typeof EvaluationRoute
   '/how-it-works': typeof HowItWorksRoute
+  '/integrations': typeof IntegrationsRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
   '/orders': typeof OrdersRoute
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/clarification'
     | '/evaluation'
     | '/how-it-works'
+    | '/integrations'
     | '/interpretations'
     | '/inventory'
     | '/orders'
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/clarification'
     | '/evaluation'
     | '/how-it-works'
+    | '/integrations'
     | '/interpretations'
     | '/inventory'
     | '/orders'
@@ -184,6 +195,7 @@ export interface FileRouteTypes {
     | '/clarification'
     | '/evaluation'
     | '/how-it-works'
+    | '/integrations'
     | '/interpretations'
     | '/inventory'
     | '/orders'
@@ -201,6 +213,7 @@ export interface RootRouteChildren {
   ClarificationRoute: typeof ClarificationRoute
   EvaluationRoute: typeof EvaluationRoute
   HowItWorksRoute: typeof HowItWorksRoute
+  IntegrationsRoute: typeof IntegrationsRoute
   InterpretationsRoute: typeof InterpretationsRoute
   InventoryRoute: typeof InventoryRoute
   OrdersRoute: typeof OrdersRoute
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/how-it-works'
       fullPath: '/how-it-works'
       preLoaderRoute: typeof HowItWorksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/integrations': {
+      id: '/integrations'
+      path: '/integrations'
+      fullPath: '/integrations'
+      preLoaderRoute: typeof IntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/interpretations': {
@@ -321,6 +341,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClarificationRoute: ClarificationRoute,
   EvaluationRoute: EvaluationRoute,
   HowItWorksRoute: HowItWorksRoute,
+  IntegrationsRoute: IntegrationsRoute,
   InterpretationsRoute: InterpretationsRoute,
   InventoryRoute: InventoryRoute,
   OrdersRoute: OrdersRoute,

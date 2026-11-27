@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot, Package, Warehouse, Truck, Users, Settings as SettingsIcon,
-  Plus, Send, Loader2, AlertCircle, ChevronRight, MessageSquare,
+  Plus, Send, Loader2, AlertCircle, ChevronRight, MessageSquare, PlugZap,
 } from "lucide-react";
 import { useResolveX } from "@/context/useResolveX";
 import { resolveXService, mapDemoRoleToBackendHeader } from "@/services/api";
@@ -124,6 +124,7 @@ function HomePage() {
     { to: "/warehouse", label: "Warehouse", icon: Warehouse },
     { to: "/orders", label: "Orders", icon: Truck },
     { to: "/suppliers", label: "Suppliers", icon: Users },
+    { to: "/integrations", label: "Integrations", icon: PlugZap },
     { to: "/settings", label: "Settings", icon: SettingsIcon },
   ] as const;
 

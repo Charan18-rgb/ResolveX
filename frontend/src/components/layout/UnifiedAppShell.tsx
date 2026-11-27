@@ -19,6 +19,7 @@ import {
   Menu,
   MessageSquareMore,
   Package,
+  PlugZap,
   PlusCircle,
   Search,
   SearchCheck,
@@ -64,6 +65,7 @@ const PS2_NAV = [
 
 const PLATFORM_NAV = [
   { to: "/evaluation", label: "Unified Analytics", icon: BarChart3 },
+  { to: "/integrations", label: "Integrations", icon: PlugZap },
   { to: "/how-it-works", label: "How It Works", icon: HelpCircle },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;

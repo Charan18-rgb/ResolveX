@@ -1,4 +1,6 @@
 import { useMemo } from "react";
+import { Link } from "@tanstack/react-router";
+import { Box } from "lucide-react";
 import type { OpsCard } from "../../services/opsApi";
 import type { SupplierPerf, SupplierDetail, StorageBin, WarehouseOverview, OrderTimeline } from "../../services/opsApi";
 
@@ -113,6 +115,15 @@ function MaterialLocationCard({ data }: { data: { material: any; balance: any | 
         </tbody>
       </table>
       {data.locations.length === 0 && <p className="py-3 text-sm text-slate-500">No storage bins recorded for this material.</p>}
+      {data.locations.length > 0 && (
+        <Link
+          to="/warehouse"
+          search={{ material: String(m.sku ?? m.id ?? ""), view: "3d" }}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500"
+        >
+          <Box size={13} /> Open in 3D warehouse
+        </Link>
+      )}
     </div>
   );
 }

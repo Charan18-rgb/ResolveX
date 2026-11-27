@@ -1,10 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Package } from "lucide-react";
+import { Search, Package, Box, Map as MapIcon } from "lucide-react";
 import { useResolveX } from "@/context/useResolveX";
 import { opsApi, type StorageBin, type WarehouseOverview } from "@/services/opsApi";
+import { WarehouseScene3D } from "@/components/warehouse/WarehouseScene3D";
 
-export const Route = createFileRoute("/warehouse")({ component: WarehousePage });
+export const Route = createFileRoute("/warehouse")({
+  validateSearch: (s: any): { material?: string; view?: "2d" | "3d" } => ({
+    ...(typeof s["material"] === "string" ? { material: s["material"] } : {}),
+    ...(s["view"] === "2d" || s["view"] === "3d" ? { view: s["view"] as "2d" | "3d" } : {}),
+  }),
+  component: WarehousePage,
+});
 
 const STATUS_COLOR: Record<string, string> = {
   AVAILABLE: "#0ea5e9",
@@ -21,6 +28,16 @@ function WarehousePage() {
   const [selected, setSelected] = useState<StorageBin | null>(null);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"3d" | "2d">("3d");
+
+  // Deep-link support: /warehouse?material=MAT-CHIP&view=2d
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const m = params.get("material");
+    const v = params.get("view");
+    if (m) setQuery(m);
+    if (v === "2d" || v === "3d") setViewMode(v);
+  }, []);
 
   useEffect(() => {
     Promise.all([opsApi.warehouseOverview(settings.apiBaseUrl), opsApi.warehouseLocations(undefined, settings.apiBaseUrl)])
@@ -53,9 +70,15 @@ function WarehousePage() {
           <h1 className="text-2xl font-bold text-slate-900">Warehouse</h1>
           <p className="text-sm text-slate-500">{overview?.warehouse?.name ?? "Storage facility"} — interactive storage map from live bin records.</p>
         </div>
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find product (e.g. MAT-CHIP)" className="w-64 rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-cyan-500" />
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find product (e.g. MAT-CHIP)" className="w-64 rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm outline-none focus:border-cyan-500" />
+          </div>
+          <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
+            <button onClick={() => setViewMode("3d")} className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${viewMode === "3d" ? "bg-cyan-600 text-white" : "text-slate-600"}`}><Box size={13} /> 3D</button>
+            <button onClick={() => setViewMode("2d")} className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium ${viewMode === "2d" ? "bg-cyan-600 text-white" : "text-slate-600"}`}><MapIcon size={13} /> 2D</button>
+          </div>
         </div>
       </div>
 
@@ -69,7 +92,19 @@ function WarehousePage() {
         </div>
       )}
 
+      {viewMode === "3d" ? (
+        <div className="mb-6">
+          <WarehouseScene3D
+            bins={bins}
+            highlightMaterial={highlightMat || null}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelected}
+          />
+        </div>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-3">
+        {viewMode === "2d" && (
         <div className="space-y-6 lg:col-span-2">
           {zones.map(([zone, zoneBins]) => (
             <section key={zone} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -104,6 +139,7 @@ function WarehousePage() {
             <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-2 ring-emerald-500" />Search match</span>
           </div>
         </div>
+        )}
 
         <aside className="h-fit rounded-xl border border-slate-200 bg-white p-4">
           {selected ? (

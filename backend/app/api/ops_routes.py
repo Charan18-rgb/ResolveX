@@ -3,10 +3,11 @@ conversational ops-query endpoint that powers contextual chat cards."""
 
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.config import Settings, get_settings
+from app.database.connection import get_connection
 from app.inventory.purchase_order_engine import list_proposals
 from app.inventory.shortage_detector import detect_shortages
 from app.ops.order_service import get_order_timeline
@@ -26,14 +27,46 @@ ops_router = APIRouter(prefix="/api", tags=["Operations"])
 OPERATOR_ROLES = {"ADMIN", "OPERATOR"}
 
 
-def require_operator(x_user_role: str = Header(default="VIEWER")) -> str:
-    """Backend-enforced gate for operator-only analytics endpoints (demo-level header auth)."""
+def _audit_operator_access(db_path: str, role: str, action: str, detail: str) -> None:
+    """Record operator-area access attempts in system_audit_logs (best-effort)."""
+    try:
+        from datetime import datetime, timezone
+        import json
+        with get_connection(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO system_audit_logs (actor, actor_role, action, entity_type, entity_id, details_json, created_at)
+                VALUES (?, ?, ?, 'operator_area', ?, ?, ?);
+                """,
+                ("anonymous-demo-user", role, action, "evaluation", json.dumps({"detail": detail}),
+                 datetime.now(timezone.utc).isoformat()),
+            )
+    except Exception:
+        pass  # audit must never break the request path
+
+
+def require_operator(
+    request: Request,
+    x_user_role: str = Header(default="VIEWER"),
+    settings: Settings = Depends(get_settings),
+) -> str:
+    """
+    Gate for operator-only analytics endpoints.
+
+    NOTE (demo scope): authorization uses the X-User-Role header, which is
+    client-controlled and suitable only for the hackathon demo. Production
+    deployments must replace this with verified authentication (e.g. JWT/OIDC
+    validated server-side). All decisions are written to system_audit_logs.
+    """
     role = (x_user_role or "VIEWER").upper()
+    path = request.url.path
     if role not in OPERATOR_ROLES:
+        _audit_operator_access(settings.database_path, role, "OPERATOR_ACCESS_DENIED", path)
         raise HTTPException(
             status_code=403,
             detail=f"Role '{role}' is not authorized to access operator analytics. Required: {sorted(OPERATOR_ROLES)}.",
         )
+    _audit_operator_access(settings.database_path, role, "OPERATOR_ACCESS_GRANTED", path)
     return role
 
 
@@ -102,6 +135,22 @@ def order_timeline(order_id: str, settings: Settings = Depends(get_settings)) ->
     if result is None:
         raise HTTPException(status_code=404, detail=f"Order '{order_id}' not found.")
     return result
+
+
+# --- Operator audit trail ---
+
+@ops_router.get("/operator/audit-logs")
+def operator_audit_logs(
+    limit: int = Query(default=50, le=200),
+    _role: str = Depends(require_operator),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Recent operator-area access and approval audit records (operator only)."""
+    with get_connection(settings.database_path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM system_audit_logs ORDER BY created_at DESC LIMIT ?;", (limit,)
+        ).fetchall()
+    return {"logs": [dict(r) for r in rows]}
 
 
 # --- Conversational ops query (contextual chat cards) ---
