@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS resolved_intents (
     FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS message_drafts (
+    conversation_id TEXT PRIMARY KEY,
+    draft_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS evaluation_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL UNIQUE,

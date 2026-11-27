@@ -158,6 +158,7 @@ def operator_audit_logs(
 class OpsQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     context: Optional[dict[str, Any]] = None
+    conversation_id: Optional[str] = Field(default=None, max_length=64)
 
 
 _CARD_TYPES = Literal[
@@ -400,8 +401,7 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     }
 
 
-@ops_router.post("/ops/query")
-def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]:
     """
     Deterministically route a business question to the right verified dataset
     and return a typed card payload for the conversational UI.
@@ -582,3 +582,68 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
         "summary": "I can check stock levels, storage locations, supplier reliability, order risks, and purchase orders.",
         "data": {},
     }
+
+
+@ops_router.post("/ops/query")
+def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    """
+    Route the question to a card, then persist the turn so business-operations
+    interactions appear in chat history and message drafts survive reloads.
+
+    Persistence is best-effort: a database failure never breaks the card
+    response. "help" cards are not persisted (the client falls through to the
+    NLU pipeline, which owns its own conversation).
+    """
+    import logging
+    import uuid
+
+    from app.database import operations as db_ops
+
+    logger = logging.getLogger(__name__)
+    db = settings.database_path
+
+    conv_id = (body.conversation_id or "").strip() or None
+    conv = None
+    if conv_id:
+        conv = db_ops.get_conversation(db, conv_id)
+        if conv is None:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+        # The persisted draft is the source of truth for follow-up edits —
+        # inject it when the client has no session copy (e.g. after refresh).
+        persisted = db_ops.get_message_draft(db, conv_id)
+        if persisted and not (body.context or {}).get("last_message_draft"):
+            ctx = dict(body.context or {})
+            ctx["last_message_draft"] = persisted["draft"]
+            body = body.model_copy(update={"context": ctx})
+
+    card = _ops_query_impl(body, settings)
+    if card.get("card_type") == "help":
+        return card
+
+    try:
+        if conv is None:
+            conv_id = str(uuid.uuid4())
+            db_ops.create_conversation(
+                db,
+                conv_id,
+                original_instruction=body.question.strip()[:200],
+                status="RESOLVED",
+            )
+            conv = db_ops.get_conversation(db, conv_id)
+        turn = int((conv or {}).get("turn_count") or 1)
+        db_ops.add_message(db, conv_id, role="user", content=body.question, turn_number=turn)
+        db_ops.add_message(
+            db, conv_id, role="assistant",
+            content=str(card.get("summary") or card.get("title") or ""), turn_number=turn,
+        )
+        db_ops.update_conversation_state(db, conv_id, status="RESOLVED", turn_count=turn + 1)
+        if (
+            card.get("card_type") == "message_draft"
+            and isinstance(card.get("data"), dict)
+            and "body" in card["data"]
+        ):
+            db_ops.upsert_message_draft(db, conv_id, card["data"])
+        card["conversation_id"] = conv_id
+    except Exception:
+        logger.exception("ops persistence failed; returning card without history")
+    return card

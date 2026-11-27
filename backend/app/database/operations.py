@@ -418,6 +418,51 @@ def delete_conversation(db_path: str, conversation_id: str) -> bool:
         raise DatabaseOperationError("Failed to delete conversation.") from exc
 
 
+def upsert_message_draft(
+    db_path: str, conversation_id: str, draft: dict[str, Any], status: str = "DRAFT"
+) -> None:
+    """Create or replace the persisted draft for a conversation."""
+    import json as _json
+
+    now = _utc_now_iso()
+    try:
+        with get_connection(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO message_drafts (conversation_id, draft_json, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(conversation_id) DO UPDATE SET
+                    draft_json = excluded.draft_json,
+                    status = excluded.status,
+                    updated_at = excluded.updated_at;
+                """,
+                (conversation_id, _json.dumps(draft), status, now, now),
+            )
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to save message draft.") from exc
+
+
+def get_message_draft(db_path: str, conversation_id: str) -> Optional[dict[str, Any]]:
+    """Return the persisted draft for a conversation, or None."""
+    import json as _json
+
+    try:
+        with get_connection(db_path) as conn:
+            row = conn.execute(
+                "SELECT draft_json, status, updated_at FROM message_drafts WHERE conversation_id = ?;",
+                (conversation_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "draft": _json.loads(row["draft_json"]),
+            "status": row["status"],
+            "updated_at": row["updated_at"],
+        }
+    except (sqlite3.Error, ValueError) as exc:
+        raise DatabaseOperationError("Failed to fetch message draft.") from exc
+
+
 def rename_conversation(db_path: str, conversation_id: str, title: str) -> bool:
     """Rename a conversation's displayed title (original_instruction)."""
     try:

@@ -181,6 +181,7 @@ def list_conversations(
         return {
             "conversation": conv,
             "messages": messages,
+            "draft": db_ops.get_message_draft(db_path, conversation_id),
             "clarification_questions": questions,
             "resolved_intent": intent,
             "confidence_assessment": confidence_assessment,

@@ -64,7 +64,7 @@ export interface OrderTimeline {
   allocations: any[]; related_proposals: any[];
   risk: any | null; stages: OrderTimelineStage[]; computed_at: string | null;
 }
-export interface OpsCard { card_type: string; title: string; summary?: string; data: unknown; }
+export interface OpsCard { card_type: string; title: string; summary?: string; data: unknown; conversation_id?: string; }
 
 export const opsApi = {
   warehouseOverview: (b?: string) => req<WarehouseOverview>("/api/warehouse/overview", undefined, b),
@@ -76,8 +76,8 @@ export const opsApi = {
   compareSuppliers: (a: string, bId: string, b?: string) =>
     req<{ a: SupplierDetail; b: SupplierDetail }>(`/api/suppliers/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(bId)}`, undefined, b),
   orderTimeline: (orderId: string, b?: string) => req<OrderTimeline>(`/api/orders/${encodeURIComponent(orderId)}/timeline`, undefined, b),
-  query: (question: string, b?: string, context?: Record<string, any>) =>
-    req<OpsCard>("/api/ops/query", { method: "POST", body: JSON.stringify({ question, context: context ?? null }) }, b),
+  query: (question: string, b?: string, context?: Record<string, any>, conversationId?: string) =>
+    req<OpsCard>("/api/ops/query", { method: "POST", body: JSON.stringify({ question, context: context ?? null, conversation_id: conversationId ?? null }) }, b),
   emailStatus: (b?: string) => req<{ connected: boolean; sender?: string | null; note?: string }>("/api/email/status", undefined, b),
   sendEmail: (payload: { to: string; subject: string; body: string }, b?: string) =>
     req<{ sent: boolean; message_id?: string }>(

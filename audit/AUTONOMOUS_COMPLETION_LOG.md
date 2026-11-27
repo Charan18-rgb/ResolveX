@@ -39,3 +39,13 @@ Session start state: HEAD `2bbff1d` (pushed, remote verified), clean tree, backe
 - Browser-verified: history drawer lists real conversations; opening "Send the report to Rahul." restored title + ordered messages; delete via confirm dialog removed it (API confirms gone).
 - Note: ops-query business cards do NOT create backend conversations (only /api/analyze NLU path persists) — history shows NLU conversations; documented limitation.
 - Tests: vitest 26/26, tsc 0 errors.
+
+## Phase 3 — state isolation, draft persistence, dialogs, eval cleanup
+
+- Conversation-state isolation: `lastDraft`/`pendingClarify` refs replaced by `convState` store keyed per conversation id (`frontend/src/lib/convState.ts`). New chats use `__new__` key, cleared on newChat; delete clears the key; open restores pendingClarify from server status + persisted draft. 6 new Vitest cases cover two-conversation isolation.
+- Eval pollution: deleted 410 conversations matching (exact ps6_dataset instruction AND within a recorded evaluation_records run window). 71 remain (20 dataset-matching outside windows + 51 non-dataset manual/test convs) — left untouched as not confidently identifiable. Zero orphan messages (FK cascade verified). Future runs self-clean: `run_ps6_evaluation` now deletes every conversation it creates and reports `eval_conversations_cleaned`.
+- Draft persistence: new `message_drafts` table (migration v3, cascade on conversation delete). `/api/ops/query` accepts `conversation_id`, auto-creates a RESOLVED conversation for ops turns (persisting user+assistant messages), injects the persisted draft when client context lacks one, upserts drafts, returns `conversation_id`. `GET /api/conversations?conversation_id=` now returns `draft`. Verified live: draft created → refresh → reopen → "Make it more formal." produced formal draft server-side; draft card re-renders on open; delete cascades drafts.
+- Business-ops history: ops cards now create persistent conversations (title = first question), so inventory/supplier/order chats appear in history and are reopenable (as text; card JSON is not persisted — documented gap).
+- Dialogs: native prompt()/confirm() replaced by `ConversationDialogs.tsx` (rename + delete) with Escape/overlay close, Enter submit, busy/error states, mobile-friendly.
+- Tests: backend pytest 72/72, Vitest 32/32, tsc 0 errors, production build pass. NLU multi-turn smoke verified live (analyze→clarify→clarify→RESOLVED).
+- Gmail: still NOT CONNECTED (verified /api/email/status configured:false). Draft-only preserved.

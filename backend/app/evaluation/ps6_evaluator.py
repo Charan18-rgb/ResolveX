@@ -110,6 +110,7 @@ def run_ps6_evaluation(
 
     category_stats: dict[str, dict[str, int]] = {}
     results_detail: list[dict[str, Any]] = []
+    eval_conversation_ids: list[str] = []
 
     for item in dataset:
         instruction = str(item["instruction"])
@@ -130,6 +131,7 @@ def run_ps6_evaluation(
 
         try:
             response = start_conversation(db_path, instruction)
+            eval_conversation_ids.append(response.conversation_id)
             predicted_needs = bool(response.needs_clarification)
             predicted_class = response.classification or "unknown"
             detected_types = [t.lower() for t in response.ambiguity_types]
@@ -268,7 +270,18 @@ def run_ps6_evaluation(
         false_clarification_rate=resolvex_metrics["false_clarification_rate"],
     )
 
+    # Benchmark runs must not pollute the user's chat history: remove every
+    # conversation this run created (cascades to messages/interpretations/etc.).
+    cleaned = 0
+    for cid in eval_conversation_ids:
+        try:
+            if db_ops.delete_conversation(db_path, cid):
+                cleaned += 1
+        except Exception:
+            pass
+
     return {
+        "eval_conversations_cleaned": cleaned,
         "run_id": run_id,
         "model": settings.gemini_model,
         "dataset_size": total,

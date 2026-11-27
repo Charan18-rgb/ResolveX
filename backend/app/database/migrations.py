@@ -191,6 +191,19 @@ CREATE INDEX IF NOT EXISTS idx_locations_material ON storage_locations(material_
 CREATE INDEX IF NOT EXISTS idx_deliveries_supplier ON supplier_deliveries(supplier_id, expected_date DESC);
 """
 
+DRAFT_MIGRATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS message_drafts (
+    conversation_id TEXT PRIMARY KEY,
+    draft_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'DRAFT',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_message_drafts_updated ON message_drafts(updated_at DESC);
+"""
+
 
 def run_migrations(db_path: str) -> None:
     """Apply PS2 schema migrations idempotently without dropping existing data."""
@@ -207,5 +220,12 @@ def run_migrations(db_path: str) -> None:
             """
             INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
             VALUES (2, 'Warehouse storage locations and supplier delivery history', datetime('now'));
+            """
+        )
+        conn.executescript(DRAFT_MIGRATIONS_SQL)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (3, 'Per-conversation message draft persistence', datetime('now'));
             """
         )

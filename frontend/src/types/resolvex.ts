@@ -1187,6 +1187,11 @@ export interface BackendConversationDetail {
     resolved_instruction: string;
     direct_answer?: string | null;
   } | null;
+  draft?: {
+    draft: Record<string, unknown>;
+    status: string;
+    updated_at: string;
+  } | null;
 }
 
 export interface BackendOrderRow {

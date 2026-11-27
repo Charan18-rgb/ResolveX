@@ -9,6 +9,8 @@ import { useResolveX } from "@/context/useResolveX";
 import { resolveXService, mapDemoRoleToBackendHeader } from "@/services/api";
 import { opsApi, type OpsCard } from "@/services/opsApi";
 import { OpsCardView } from "@/components/chat/OpsCardView";
+import { createConvStateStore, NEW_CONV_KEY, type ConvStateStore } from "@/lib/convState";
+import { RenameConversationDialog, DeleteConversationDialog } from "@/components/chat/ConversationDialogs";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
@@ -114,10 +116,14 @@ function HomePage() {
   const [activeConv, setActiveConv] = useState<{ id: string; title: string } | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [mobileHistoryOpen, setMobileHistoryOpen] = useState(false);
+  const [convDialog, setConvDialog] = useState<null | { type: "rename" | "delete"; conv: HistoryItem }>(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const pendingClarify = useRef<{ conversationId: string } | null>(null);
-  const lastDraft = useRef<Record<string, any> | null>(null);
+  const convStates = useRef<ConvStateStore | null>(null);
+  if (!convStates.current) convStates.current = createConvStateStore();
+  const convStore = convStates.current;
   const sendingRef = useRef(false);
 
   const loadHistory = useCallback(() => {
@@ -161,20 +167,31 @@ function HomePage() {
       setMessages((prev) => [...prev, userMsg, { id: aiId, role: "assistant", text: "", card: null, pending: true }]);
 
       const base = settings.apiBaseUrl;
+      const convKey = activeConv?.id ?? NEW_CONV_KEY;
+      const cs = convStore.get(convKey);
       try {
         try {
           const card = await opsApi.query(
             text,
             base,
-            lastDraft.current ? { last_message_draft: lastDraft.current } : undefined,
+            cs.draft ? { last_message_draft: cs.draft } : undefined,
+            activeConv?.id ?? undefined,
           );
-          if (card.card_type === "message_draft") {
-            lastDraft.current = card.data as Record<string, any>;
-          } else if (card.card_type !== "help") {
-            lastDraft.current = null;
-          }
           if (card.card_type !== "help") {
-            pendingClarify.current = null;
+            // The backend persists ops turns into conversations and returns the
+            // id — adopt it so drafts/history attach to the right conversation.
+            const cid = card.conversation_id ?? convKey;
+            if (cid !== convKey) {
+              convStore.set(cid, { pendingClarify: null });
+              if (convKey === NEW_CONV_KEY) convStore.clear(NEW_CONV_KEY);
+              setActiveConv({ id: cid, title: text.slice(0, 60) });
+              loadHistory();
+            }
+            if (card.card_type === "message_draft") {
+              convStore.set(cid, { draft: card.data as Record<string, any> });
+            } else {
+              convStore.set(cid, { draft: null, pendingClarify: null });
+            }
             patchMsg(aiId, {
               pending: false,
               text: card.summary ?? card.title,
@@ -185,16 +202,19 @@ function HomePage() {
         } catch {
           // ops router unreachable — fall through to language pipeline
         }
-        lastDraft.current = null;
+        convStore.set(convKey, { draft: null });
 
         // Fall back to the language-understanding pipeline for instructions/clarifications.
         try {
           // Multi-turn: if the previous turn asked for clarification, continue that conversation.
-          const resp = pendingClarify.current
-            ? await resolveXService.clarifyWithBackend(pendingClarify.current.conversationId, text, base)
+          const resp = cs.pendingClarify
+            ? await resolveXService.clarifyWithBackend(cs.pendingClarify.conversationId, text, base)
             : await resolveXService.analyzeWithBackend(text, undefined, base);
-          pendingClarify.current =
+          const pending =
             resp.status === "NEEDS_CLARIFICATION" ? { conversationId: resp.conversation_id } : null;
+          const newKey = resp.conversation_id;
+          convStore.set(newKey, { pendingClarify: pending, draft: null });
+          if (newKey !== convKey) convStore.set(convKey, { pendingClarify: null });
           setActiveConv({ id: resp.conversation_id, title: text.slice(0, 60) });
           loadHistory();
           const top = resp.interpretations?.[0];
@@ -220,7 +240,7 @@ function HomePage() {
         sendingRef.current = false;
       }
     },
-    [settings.apiBaseUrl, patchMsg, loadHistory],
+    [settings.apiBaseUrl, patchMsg, loadHistory, activeConv?.id, convStore],
   );
 
   const openConversation = useCallback(
@@ -239,15 +259,32 @@ function HomePage() {
             card: null,
             analysis: null,
           }));
-        setMessages(
-          loaded.length
-            ? loaded
-            : [{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }],
-        );
+        const persistedDraft = detail.draft?.draft ?? null;
+        const msgs: ChatMsg[] = loaded.length
+          ? [...loaded]
+          : [{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }];
+        // Re-render the persisted draft card so it survives refreshes.
+        if (persistedDraft && typeof persistedDraft === "object" && "body" in persistedDraft) {
+          msgs.push({
+            id: nextId(),
+            role: "assistant",
+            text: "",
+            card: {
+              card_type: "message_draft",
+              title: `Message Draft — ${String(persistedDraft["recipient"] ?? "there")}`,
+              summary: "Draft restored from this conversation. Still not sent — no messaging provider is connected.",
+              data: persistedDraft,
+            },
+            analysis: null,
+          });
+        }
+        setMessages(msgs);
         setActiveConv({ id: h.id, title: conv.original_instruction?.slice(0, 60) || h.title });
-        pendingClarify.current =
-          conv.status === "NEEDS_CLARIFICATION" ? { conversationId: h.id } : null;
-        lastDraft.current = null;
+        convStore.set(h.id, {
+          pendingClarify:
+            conv.status === "NEEDS_CLARIFICATION" ? { conversationId: h.id } : null,
+          draft: persistedDraft,
+        });
       } catch {
         setMessages([
           { id: nextId(), role: "assistant", text: "I couldn't load that conversation. Please try again.", card: null, analysis: null },
@@ -256,46 +293,71 @@ function HomePage() {
         setOpeningId(null);
       }
     },
-    [openingId, settings.apiBaseUrl],
-  );
-
-  const deleteConversation = useCallback(
-    async (h: { id: string; title: string }) => {
-      if (!window.confirm(`Delete conversation "${h.title}"? This cannot be undone.`)) return;
-      try {
-        await resolveXService.deleteConversation(h.id, settings.apiBaseUrl);
-        if (activeConv?.id === h.id) newChat();
-        loadHistory();
-      } catch {
-        // keep the item; history refresh will reflect reality
-        loadHistory();
-      }
-    },
-    [activeConv, settings.apiBaseUrl, loadHistory],
-  );
-
-  const renameConversation = useCallback(
-    async (h: { id: string; title: string }) => {
-      const title = window.prompt("Rename conversation:", h.title);
-      if (!title || !title.trim() || title.trim() === h.title) return;
-      try {
-        await resolveXService.renameConversation(h.id, title.trim(), settings.apiBaseUrl);
-        if (activeConv?.id === h.id) setActiveConv({ id: h.id, title: title.trim().slice(0, 60) });
-        loadHistory();
-      } catch {
-        loadHistory();
-      }
-    },
-    [activeConv, settings.apiBaseUrl, loadHistory],
+    [openingId, settings.apiBaseUrl, convStore],
   );
 
   const newChat = useCallback(() => {
-    pendingClarify.current = null;
-    lastDraft.current = null;
+    convStore.clear(NEW_CONV_KEY);
     setActiveConv(null);
     setMessages([{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }]);
     inputRef.current?.focus();
+  }, [convStore]);
+
+  const openRenameDialog = useCallback((h: HistoryItem) => {
+    setDialogError(null);
+    setDialogBusy(false);
+    setConvDialog({ type: "rename", conv: h });
   }, []);
+
+  const openDeleteDialog = useCallback((h: HistoryItem) => {
+    setDialogError(null);
+    setDialogBusy(false);
+    setConvDialog({ type: "delete", conv: h });
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    if (dialogBusy) return;
+    setConvDialog(null);
+    setDialogError(null);
+  }, [dialogBusy]);
+
+  const submitRename = useCallback(
+    async (title: string) => {
+      if (!convDialog || convDialog.type !== "rename") return;
+      const h = convDialog.conv;
+      setDialogBusy(true);
+      setDialogError(null);
+      try {
+        await resolveXService.renameConversation(h.id, title, settings.apiBaseUrl);
+        if (activeConv?.id === h.id) setActiveConv({ id: h.id, title: title.slice(0, 60) });
+        setConvDialog(null);
+        loadHistory();
+      } catch {
+        setDialogError("Couldn't rename the conversation. Please try again.");
+      } finally {
+        setDialogBusy(false);
+      }
+    },
+    [convDialog, activeConv, settings.apiBaseUrl, loadHistory],
+  );
+
+  const confirmDelete = useCallback(async () => {
+    if (!convDialog || convDialog.type !== "delete") return;
+    const h = convDialog.conv;
+    setDialogBusy(true);
+    setDialogError(null);
+    try {
+      await resolveXService.deleteConversation(h.id, settings.apiBaseUrl);
+      convStore.clear(h.id);
+      if (activeConv?.id === h.id) newChat();
+      setConvDialog(null);
+      loadHistory();
+    } catch {
+      setDialogError("Couldn't delete the conversation. Please try again.");
+    } finally {
+      setDialogBusy(false);
+    }
+  }, [convDialog, activeConv, settings.apiBaseUrl, loadHistory, convStore, newChat]);
 
   const navItems = [
     { to: "/inventory", label: "Inventory", icon: Package },
@@ -332,8 +394,8 @@ function HomePage() {
             activeId={activeConv?.id ?? null}
             openingId={openingId}
             onOpen={(h) => void openConversation(h)}
-            onRename={(h) => void renameConversation(h)}
-            onDelete={(h) => void deleteConversation(h)}
+            onRename={openRenameDialog}
+            onDelete={openDeleteDialog}
           />
         </div>
         <nav className="border-t border-slate-800 p-3">
@@ -480,13 +542,30 @@ function HomePage() {
                 activeId={activeConv?.id ?? null}
                 openingId={openingId}
                 onOpen={(h) => { setMobileHistoryOpen(false); void openConversation(h); }}
-                onRename={(h) => void renameConversation(h)}
-                onDelete={(h) => void deleteConversation(h)}
+                onRename={openRenameDialog}
+                onDelete={openDeleteDialog}
               />
             </div>
           </div>
         </div>
       )}
+
+      <RenameConversationDialog
+        open={convDialog?.type === "rename"}
+        initialTitle={convDialog?.type === "rename" ? convDialog.conv.title : ""}
+        busy={dialogBusy}
+        error={dialogError}
+        onCancel={closeDialog}
+        onSubmit={(t) => void submitRename(t)}
+      />
+      <DeleteConversationDialog
+        open={convDialog?.type === "delete"}
+        title={convDialog?.type === "delete" ? convDialog.conv.title : ""}
+        busy={dialogBusy}
+        error={dialogError}
+        onCancel={closeDialog}
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   );
 }
