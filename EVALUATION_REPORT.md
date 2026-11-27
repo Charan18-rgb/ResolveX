@@ -2,20 +2,22 @@
 
 *Updated 2026-11-27 with measured results. See `audit/FINAL_EVALUATION_METRICS.md` for full methodology and caveats.*
 
-## 1. Language Evaluation (48-case ambiguity dataset)
+## 1. Language Evaluation (60-case ambiguity dataset)
 
-**Dataset:** `backend/tests/evaluation/ps6_dataset.json` — 48 items (12 each: ambiguous, incomplete, context_dependent, clear). Single-turn.
+**Dataset:** `backend/tests/evaluation/ps6_dataset.json` — 60 items including an adversarial subset (lexical, referential, structural, contextual, semantic, underspecification categories plus multi-turn and clear-control tags). Single-turn.
 
-**Live run — `gemini-3.8-flash`, 2026-11-27:**
+**Live run — `gemini-3.8-flash`, post-merge verified 2026-11-27:**
 
 | Metric | Value |
 |---|---|
-| Precision | 0.9474 |
-| Recall | 1.0000 |
-| F1 | 0.9730 |
-| Resolution accuracy | 0.7708 |
-| False-clarification rate | 0.0417 |
-| Confusion | TP=36, TN=10, FP=2, FN=0 |
+| Precision | 0.9388 |
+| Recall | 0.9787 |
+| F1 | 0.9583 |
+| Resolution accuracy | 0.7500 |
+| False-clarification rate | 0.0500 |
+| Confusion | TP=46, TN=10, FP=3, FN=1 |
+| Fallback cases | 3 / 60 (provenance: `ai_fallback_mixed`) |
+| Naive-regex baseline F1 | 0.4068 |
 
 Reproduce: `GET /api/evaluation/ps6?run_now=true`.
 

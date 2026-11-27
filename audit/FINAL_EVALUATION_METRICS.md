@@ -6,24 +6,28 @@
 
 **Method:** `GET /api/evaluation/ps6?run_now=true` executed live on 2026-11-27 against `gemini-3.8-flash` with a configured `GEMINI_API_KEY`.
 
-**Dataset:** `backend/tests/evaluation/ps6_dataset.json` — 48 items, 12 per category: `ambiguous`, `incomplete`, `context_dependent`, `clear`. Each item has `instruction`, `expected_needs_clarification`, `expected_classification`. Single-turn only — no multi-turn or parameter-extraction fields exist in the dataset (documented limitation).
+**Dataset:** `backend/tests/evaluation/ps6_dataset.json` — 60 items: 48 core cases (12 per category: `ambiguous`, `incomplete`, `context_dependent`, `clear`) plus a 12-case adversarial subset covering lexical, referential, structural, contextual, semantic and underspecification ambiguities with multi-turn and clear-control tags. Single-turn.
+
+**Latest live run — `gemini-3.8-flash`, 2026-11-27 (post-merge, run_id `807ea43a`):**
 
 | Metric | Value | Definition |
 |---|---|---|
-| True Positives | 36 | Correctly asked for clarification |
+| True Positives | 46 | Correctly asked for clarification |
 | True Negatives | 10 | Correctly resolved clear items |
-| False Positives | 2 | Asked clarification on clear items |
-| False Negatives | 0 | Missed ambiguity |
-| Precision | 0.9474 | TP / (TP+FP) |
-| Recall | 1.0000 | TP / (TP+FN) |
-| F1 | 0.9730 | Harmonic mean |
-| Resolution accuracy | 0.7708 | Exact `predicted_classification == expected_classification` |
-| False-clarification rate | 0.0417 | FP / total clear items |
+| False Positives | 3 | Asked clarification on clear items |
+| False Negatives | 1 | Missed ambiguity |
+| Precision | 0.9388 | TP / (TP+FP) |
+| Recall | 0.9787 | TP / (TP+FN) |
+| F1 | 0.9583 | Harmonic mean |
+| Resolution accuracy | 0.7500 | Exact `predicted_classification == expected_classification` |
+| False-clarification rate | 0.0500 | FP / total clear items |
+| Fallback cases | 3 / 60 | Cases where the confidence engine recorded `ai_unavailable_abstained` → provenance `ai_fallback_mixed` |
+| Naive-regex baseline | F1 0.4068, recall 0.2553, resolution accuracy 0.30 | Single-turn keyword baseline computed by the evaluator |
 
 **Caveats (honest):**
-- Deterministic local patterns short-circuit before Gemini for closed-world tasks, so these numbers reflect the *hybrid* pipeline, not pure LLM quality.
-- On any per-item exception the evaluator records a safe `needs_clarification=True` fallback, which can inflate TN/FP — with a healthy API this did not trigger.
-- Prior audit numbers (P=0.75/R=1.0/F1=0.857, resolution_accuracy 0.1042–0.25) were produced under fallback-dominated conditions and are superseded by this live run.
+- Gemini is primary; deterministic local patterns engage only when the model call fails or on clarification turns, so these numbers reflect the live-model pipeline with 3 fallback-affected cases.
+- Earlier same-day run on the 48-item core dataset measured P=0.9474 / R=1.0 / F1=0.9730 / resolution_accuracy=0.7708; the expanded 60-item adversarial dataset is harder and is the current figure of record.
+- Prior audit numbers (P=0.75/R=1.0/F1=0.857) were produced under fallback-dominated conditions and are superseded.
 
 ## 2. Inventory intelligence benchmark
 
@@ -46,6 +50,6 @@ When Gemini is unavailable the pipeline degrades to `local_analyzer` (closed-wor
 
 ## 4. What is NOT measured
 
-- Multi-turn clarification accuracy (dataset has no context/reply fields).
+- Multi-turn clarification accuracy beyond the single `follow_up_clarification` turn supplied per dataset item.
 - Parameter-extraction precision for resolved intents.
 - Statistical calibration of any confidence-like figure — the UI ambiguity index is explicitly labeled a structural heuristic, and fabricated interpretation probabilities were removed.
