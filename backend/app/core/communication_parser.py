@@ -4,6 +4,7 @@ Uses Gemini structured interpretation when configured, with a deterministic
 fallback that handles relationships, possessives, pronouns and spelling.
 """
 
+import re
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -105,8 +106,12 @@ def _parse_deterministic(question: str, context: Optional[dict[str, Any]]) -> Co
         q, flags=re.IGNORECASE,
     )
     if rel_match:
-        relationship = rel_match.group(1).lower()
-        recipient_name = rel_match.group(2).strip()
+        candidate = rel_match.group(2).strip()
+        # IGNORECASE lets the name group match lowercase words like "about";
+        # only accept a genuine capitalized name.
+        if _looks_like_name(candidate.split()[0]) and candidate.split()[0].lower() not in _NAME_STOPWORDS:
+            relationship = rel_match.group(1).lower()
+            recipient_name = candidate
 
     # Pronoun / context reference: "Tell him...", "email her...", "message them..."
     if recipient_name is None:
@@ -254,3 +259,212 @@ def parse_communication(
         except Exception:
             pass
     return _parse_deterministic(question, context)
+
+
+# ---------------------------------------------------------------------------
+# Unified NLU analysis adapter
+#
+# Exposes deterministic communication interpretation as the shared
+# GeminiAnalysisOutput schema so the general ambiguity pipeline, the local
+# resolver and the ops query router all consume one structured representation.
+# ---------------------------------------------------------------------------
+
+_COMMS_STRONG = re.compile(
+    r"\b(e-?mail|message|msg|remind|notify|text|tell|forward)\b", re.IGNORECASE
+)
+_COMMS_SEND = re.compile(
+    r"\b(send|share)\b[^.]*\b(reminder|message|email|e-mail|note|text|invoice|payment)\b",
+    re.IGNORECASE,
+)
+_PRONOUN = re.compile(r"\b(he|him|his|she|her|they|them|it|this|that)\b", re.IGNORECASE)
+
+
+def looks_like_communication(text: str) -> bool:
+    """True when the instruction is person-directed messaging, not a delivery
+    or document-send request (those stay with the generic send pipeline)."""
+    return bool(_COMMS_STRONG.search(text) or _COMMS_SEND.search(text))
+
+
+def _followup_reference(question: str) -> bool:
+    """Pronoun/anaphoric follow-up that edits or extends an existing draft.
+
+    Requires the reference to be genuinely unresolved: edit verbs with a
+    pronoun ('Make it more formal'), or a pronoun recipient with no named
+    person anywhere in the request ('Tell him I will share the notes').
+    """
+    q = question.strip()
+    # Draft-edit follow-ups: 'Make it more formal', 'Change it back'. Exclude
+    # requests whose object is a business artifact (note, order, report...).
+    if (
+        re.match(r"^\s*(make|change|update|rewrite|shorten|lengthen)\b", q, re.IGNORECASE)
+        and _PRONOUN.search(q)
+        and not re.search(
+            r"\b(note|record|reminder|order|report|document|file|meeting|"
+            r"appointment|alarm|task|schedule|booking|reservation)\b",
+            q,
+            re.IGNORECASE,
+        )
+    ):
+        return True
+    # Pronoun recipient with no named person anywhere: 'Tell him ...',
+    # 'Send it to them ...'. Check names AFTER the leading verb so the verb
+    # itself is not mistaken for a name.
+    if re.match(
+        r"^\s*(tell|send|email|e-mail|message|msg|text|forward|remind|notify)\s+"
+        r"(?:to\s+)?(he|him|his|she|her|they|them|it|this|that)\b",
+        q,
+        re.IGNORECASE,
+    ):
+        rest = re.sub(r"^\s*\w+\s+", "", q, count=1)
+        if not _extract_names(rest):
+            return True
+    # short imperative edits like "Make it shorter" / "More formal please"
+    return bool(
+        len(q.split()) <= 8
+        and re.search(r"\b(formal|polite|shorter|longer|brief)\b", q, re.IGNORECASE)
+        and not re.search(r"\b(note|record|order|report|document|file|meeting|alarm|task)\b", q, re.IGNORECASE)
+    )
+
+
+def communication_analysis(
+    question: str,
+    context: Optional[dict[str, Any]] = None,
+) -> Optional[Any]:
+    """Return a GeminiAnalysisOutput for communication requests, else None.
+
+    Deterministic only (no extra model call): the LLM interpretation layer is
+    reconciled against this safe reading in ambiguity_detector.
+    """
+    from app.models.ai_schemas import (
+        GeminiAnalysisOutput,
+        InterpretationOutput,
+        ResolvedIntentOutput,
+    )
+
+    q = question.strip()
+    if not q:
+        return None
+
+    # Pronoun/anaphoric follow-ups resolve against the active draft at the
+    # execution layer; the interpretation is context-dependent by definition.
+    if _followup_reference(q):
+        has_draft = bool(context and context.get("last_message_draft"))
+        return GeminiAnalysisOutput(
+            classification="context_dependent",
+            ambiguity_types=["contextual"],
+            needs_clarification=not has_draft,
+            reasoning="Pronoun or anaphoric reference resolves against the active conversation draft.",
+            interpretations=[
+                InterpretationOutput(
+                    label="Update active draft",
+                    description="The request edits or extends the message draft from the current conversation.",
+                )
+            ],
+            missing_required_info=[] if has_draft else ["referent of the pronoun or 'it'"],
+            clarification_questions=(
+                []
+                if has_draft
+                else ["What should 'it' refer to? There is no active draft in this conversation."]
+            ),
+            resolved_intent=(
+                ResolvedIntentOutput(
+                    action="update_message_draft",
+                    parameters={},
+                    resolved_instruction=q,
+                    direct_answer="Interpreted as an update to the active message draft.",
+                )
+                if has_draft
+                else None
+            ),
+        )
+
+    if not looks_like_communication(q):
+        return None
+
+    intent = _parse_deterministic(q, context)
+    recipient = intent.recipient_name or intent.recipient_description or intent.relationship
+
+    # A literal email address is a fully identified recipient.
+    if not recipient:
+        addr = re.search(r"[\w.+-]+@[\w-]+\.[\w.]+", q)
+        if addr:
+            recipient = addr.group(0)
+
+    if intent.requires_clarification and recipient and "@" in recipient:
+        intent.requires_clarification = False
+
+    if intent.requires_clarification or not recipient:
+        question_text = intent.clarification_question or "Who should I send this to?"
+        return GeminiAnalysisOutput(
+            classification="ambiguous",
+            ambiguity_types=["referential", "underspecification"],
+            needs_clarification=True,
+            reasoning="Communication request lacks a confidently identified recipient.",
+            interpretations=[
+                InterpretationOutput(
+                    label="Unresolved recipient",
+                    description=question_text,
+                )
+            ],
+            missing_required_info=["recipient"],
+            clarification_questions=[question_text],
+            resolved_intent=None,
+        )
+
+    # A lone first name with no relationship qualifier still needs confirmation;
+    # a relationship ('my classmate Charan') or multi-word name is sufficient.
+    single_unqualified = (
+        intent.recipient_name is not None
+        and len(intent.recipient_name.split()) == 1
+        and not intent.relationship
+        and intent.recipient_description in (None, intent.recipient_name)
+    )
+    if single_unqualified:
+        return GeminiAnalysisOutput(
+            classification="ambiguous",
+            ambiguity_types=["referential"],
+            needs_clarification=True,
+            reasoning="Recipient is a single unqualified name; identity cannot be confirmed.",
+            interpretations=[
+                InterpretationOutput(
+                    label=f"Confirm recipient {intent.recipient_name}",
+                    description="A first name alone does not uniquely identify a person.",
+                )
+            ],
+            missing_required_info=["recipient confirmation"],
+            clarification_questions=[
+                f"There may be more than one {intent.recipient_name}. Can you confirm the full name or relationship?"
+            ],
+            resolved_intent=None,
+        )
+
+    subject = intent.subject or ""
+    resolved = (
+        f"Draft a {intent.action} to {recipient}"
+        + (f" — subject: {subject}" if subject else "")
+        + (f'. Message: "{intent.message}"' if intent.message else "")
+    )
+    return GeminiAnalysisOutput(
+        classification="clear",
+        ambiguity_types=[],
+        needs_clarification=False,
+        reasoning="Recipient and message content are identified; draft-only, no message is sent.",
+        interpretations=[],
+        missing_required_info=[],
+        clarification_questions=[],
+        resolved_intent=ResolvedIntentOutput(
+            action="draft_message",
+            parameters={
+                "channel": intent.action,
+                "recipient": recipient,
+                "relationship": intent.relationship or "",
+                "subject": subject,
+                "message": intent.message,
+            },
+            resolved_instruction=resolved,
+            direct_answer=(
+                f"Draft prepared for {recipient}. It has NOT been sent — "
+                "no messaging provider is connected."
+            ),
+        ),
+    )

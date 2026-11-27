@@ -228,7 +228,10 @@ def _inventory_query(text: str) -> LocalMatch | None:
             ),
             True,
         )
-    if purchase and inventoryish:
+    if purchase and inventoryish and any(
+        token in norm
+        for token in ("show", "list", "what", "which", "check", "pending", "status", "approval")
+    ):
         return LocalMatch(
             _clear(
                 "check_purchase_orders",
@@ -239,7 +242,10 @@ def _inventory_query(text: str) -> LocalMatch | None:
             ),
             True,
         )
-    if inventoryish and any(token in norm for token in ("show", "list", "what", "which", "check", "tell")):
+    if inventoryish and any(
+        token in norm
+        for token in ("show", "list", "what", "which", "check", "tell", "how much", "how many")
+    ):
         return LocalMatch(
             _clear(
                 "check_inventory",
@@ -278,7 +284,20 @@ def _specific_person(text: str) -> str | None:
     return name
 
 
+def _communication(text: str) -> LocalMatch | None:
+    from app.core.communication_parser import communication_analysis
+
+    analysis = communication_analysis(text)
+    if analysis is None:
+        return None
+    return LocalMatch(analysis, True)
+
+
 def _send_request(text: str) -> LocalMatch | None:
+    from app.core.communication_parser import looks_like_communication
+
+    if looks_like_communication(text):
+        return None
     if not re.search(r"\b(send|email|forward|share)\b", text, flags=re.IGNORECASE):
         return None
     if not re.search(r"\b(report|email|document|file|message)\b", text, flags=re.IGNORECASE):
@@ -368,6 +387,11 @@ def _unsupported(text: str) -> LocalMatch | None:
         "password",
         "wire transfer",
         "pay the invoice",
+        "capital of",
+        "set an alarm",
+        "alarm for",
+        "open the file",
+        "translate",
     )
     if not any(topic in norm for topic in topics):
         return None
@@ -390,6 +414,7 @@ def _unsupported(text: str) -> LocalMatch | None:
 _INTENT_FINDERS = (
     ("unit_conversion", _unit_conversion),
     ("unsupported_request", _unsupported),
+    ("communication", _communication),
     ("inventory_lookup", _inventory_query),
     ("send_request", _send_request),
 )

@@ -4,6 +4,8 @@ deterministically when the AI is unavailable, reporting fallback status
 honestly so downstream confidence intelligence never fabricates certainty.
 """
 
+import logging
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -12,7 +14,59 @@ from app.models.ai_schemas import GeminiAnalysisOutput
 from app.services import gemini_service
 from app.services.prompts import build_analysis_prompt, build_clarification_prompt
 
+logger = logging.getLogger(__name__)
+
 AnalysisSource = str  # "gemini" | "local" | "offline_fallback" | "system"
+
+
+def _reconcile_communication(
+    instruction: str, result: GeminiAnalysisOutput
+) -> GeminiAnalysisOutput:
+    """Deterministic validation layer for person-directed messaging.
+
+    The LLM interprets meaning; this check guarantees communication requests
+    are never misrouted to inventory/business intents and never silently assume
+    an unidentified recipient. Only overrides the model when the two readings
+    disagree on whether clarification is required.
+    """
+    try:
+        from app.core.communication_parser import communication_analysis
+
+        comm = communication_analysis(instruction)
+    except Exception:
+        logger.exception("Communication reconciliation failed")
+        return result
+    if comm is None:
+        return result
+    if comm.needs_clarification == result.needs_clarification:
+        # Same posture: keep the richer model output, except adopt the more
+        # precise context_dependent label for pronoun/anaphoric follow-ups.
+        if comm.classification == "context_dependent" and result.classification != "context_dependent":
+            return comm
+        return result
+    # Disagreement on whether clarification is needed: the deterministic
+    # communication reading is authoritative — it never assumes a recipient.
+    return comm
+
+
+_ANAPHORIC_OPENER = re.compile(
+    r"^\s*(yes|yeah|yep|no|do|does|did|repeat|reply|use|apply|proceed|undo|"
+    r"the opposite|that one|this one|it|that|those|same|let)\b",
+    re.IGNORECASE,
+)
+
+
+def _relabel_anaphoric(
+    instruction: str, result: GeminiAnalysisOutput
+) -> GeminiAnalysisOutput:
+    """Short utterances that only make sense against prior context
+    ('Do the opposite.', 'Yes, do that one.') are context_dependent, not
+    ambiguous — there is a single missing referent, not competing readings."""
+    if result.classification != "ambiguous" or result.needs_clarification is False:
+        return result
+    if len(instruction.strip().split()) <= 8 and _ANAPHORIC_OPENER.match(instruction):
+        return result.model_copy(update={"classification": "context_dependent"})
+    return result
 
 
 @dataclass
@@ -72,7 +126,14 @@ def detect_ambiguity_with_status(
             update={"needs_clarification": False, "clarification_questions": []}
         )
 
-    return result, False, None, "gemini"
+    # A deterministic closed-world resolver (unit conversion, inventory lookup,
+    # communication draft) is authoritative: it beats a false clarification.
+    local = _prefer_local(instruction, context_summary)
+    if local is not None and result.needs_clarification and not local.needs_clarification:
+        result = local
+
+    reconciled = _reconcile_communication(instruction, result)
+    return _relabel_anaphoric(instruction, reconciled), False, None, "gemini"
 
 
 def detect_ambiguity(
