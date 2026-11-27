@@ -68,7 +68,7 @@ function WarehousePage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Warehouse</h1>
-          <p className="text-sm text-slate-500">{overview?.warehouse?.name ?? "Storage facility"} — interactive storage map from live bin records.</p>
+          <p className="text-sm text-slate-500">{overview?.warehouse?.name ?? "Storage facility"} — interactive storage map from configured warehouse records (seeded demonstration layout).</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
