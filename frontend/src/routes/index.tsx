@@ -1,409 +1,252 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { motion } from "framer-motion";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  GitBranch,
-  Layers,
-  MessageSquareMore,
-  Package,
-  Radar,
-  SearchCheck,
-  ShieldCheck,
-  Sparkles,
+  Bot, Package, Warehouse, Truck, Users, Settings as SettingsIcon,
+  Plus, Send, Loader2, AlertCircle, ChevronRight, MessageSquare,
 } from "lucide-react";
-import { useState } from "react";
-import { IntelligenceSphere3D } from "@/components/hero/IntelligenceSphere3D";
-import { AnalysisProgressBanner } from "@/components/resolvex/AnalysisProgressBanner";
-import { Badge } from "@/components/resolvex/Badge";
-import { Button } from "@/components/resolvex/Button";
-import { Card } from "@/components/resolvex/Card";
-import { DemoBanner } from "@/components/resolvex/DemoBanner";
-import { PromptHighlighter } from "@/components/resolvex/PromptHighlighter";
-import { PromptInputCard } from "@/components/resolvex/PromptInputCard";
-import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { useResolveX } from "@/context/useResolveX";
+import { resolveXService, mapDemoRoleToBackendHeader } from "@/services/api";
+import { opsApi, type OpsCard } from "@/services/opsApi";
+import { OpsCardView } from "@/components/chat/OpsCardView";
 
-export const Route = createFileRoute("/")({
-  component: LandingPage,
-});
+export const Route = createFileRoute("/")({ component: HomePage });
 
-const THREE_STAGES = [
-  {
-    step: "01 — Detect",
-    title: "Identify Ambiguous Expressions",
-    description:
-      "Pinpoint vague pronouns, relative timing, and underspecified boundaries in English, Kannada, Hindi, Hinglish, and Kanglish.",
-    icon: SearchCheck,
-    to: "/analysis",
-  },
-  {
-    step: "02 — Clarify",
-    title: "Optimize Targeted Questions",
-    description:
-      "Simulate What-If interpretations, ask priority-ranked clarification questions, and verify required fields.",
-    icon: MessageSquareMore,
-    to: "/clarification",
-  },
-  {
-    step: "03 — Resolve",
-    title: "Verify & Act With Confidence",
-    description:
-      "Produce deterministic intent specs and link directly into Smart Inventory & CRD risk workflows.",
-    icon: CheckCircle2,
-    to: "/resolution",
-  },
-] as const;
+interface ChatMsg {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  card?: OpsCard | null;
+  analysis?: { status: string; summary: string } | null;
+  pending?: boolean;
+}
 
-const FEATURE_CARDS = [
-  {
-    title: "Detection & Context Graph",
-    badge: "Stage 01",
-    icon: Radar,
-    to: "/visualization",
-    description:
-      "Highlights span-level ambiguities and maps actions, people, objects, dates, and locations on an interactive graph.",
-  },
-  {
-    title: "What-If Simulator",
-    badge: "Stage 02",
-    icon: GitBranch,
-    to: "/interpretations",
-    description:
-      "Compare competing interpretations side by side across actions, entities, recipients, and dry-run consequences.",
-  },
-  {
-    title: "Clarification & Verification",
-    badge: "Stage 03",
-    icon: ShieldCheck,
-    to: "/clarification",
-    description:
-      "Ranks ambiguities by importance, detects missing or contradictory answers, and stops early once clear.",
-  },
-  {
-    title: "Inventory & CRD Hub",
-    badge: "Operations",
-    icon: Package,
-    to: "/inventory",
-    description:
-      "Monitor stock availability, CRD delay risks, shortages, PO recommendations, and approvals across team roles.",
-  },
-] as const;
+const SUGGESTIONS = [
+  "How much stock do I have?",
+  "Which products are running low?",
+  "Show me where my products are stored.",
+  "How much warehouse space is remaining?",
+  "Which suppliers have the best delivery history?",
+  "Which orders might be delayed?",
+  "What deliveries are expected today?",
+];
 
-function LandingPage() {
-  const navigate = useNavigate();
-  const {
-    promptInput,
-    setPromptInput,
-    domain,
-    setDomain,
-    strictness,
-    setStrictness,
-    language,
-    setLanguage,
-    isAnalyzing,
-    analysisStage,
-    analysisStageLabel,
-    activeAnalysis,
-    runAnalysis,
-    selectExamplePrompt,
-    selectMultilingualSample,
-    settings,
-    apiError,
-    clearApiError,
-  } = useResolveX();
+const WELCOME =
+  "Hello! I'm ResolveX. I can help you understand your business operations, manage inventory, locate products, monitor deliveries and identify potential problems.\n\nWhat would you like to do today?";
 
-  const [hasAnalyzedHere, setHasAnalyzedHere] = useState(false);
+let msgSeq = 0;
+const nextId = () => `m${++msgSeq}-${Date.now()}`;
 
-  const handleAnalyze = async (overridePrompt?: string) => {
-    try {
-      await runAnalysis(overridePrompt);
-      setHasAnalyzedHere(true);
-    } catch {
-      // apiError surfaced cleanly in UI
-    }
-  };
+function HomePage() {
+  const { settings, activeRole } = useResolveX();
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    { id: "welcome", role: "assistant", text: WELCOME, card: null, analysis: null },
+  ]);
+  const [input, setInput] = useState("");
+  const [history, setHistory] = useState<{ id: string; title: string }[]>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    resolveXService
+      .listConversations(15, 0, settings.apiBaseUrl)
+      .then((res) => {
+        const convs = (res.conversations ?? []) as { id: string; title?: string; preview?: string }[];
+        setHistory(convs.map((c) => ({ id: c.id, title: c.title || c.preview || "Conversation" })));
+      })
+      .catch(() => setHistory([]));
+  }, [settings.apiBaseUrl]);
+
+  const patchMsg = useCallback((id: string, patch: Partial<ChatMsg>) => {
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }, []);
+
+  const send = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text) return;
+      setInput("");
+      const userMsg: ChatMsg = { id: nextId(), role: "user", text, card: null };
+      const aiId = nextId();
+      setMessages((prev) => [...prev, userMsg, { id: aiId, role: "assistant", text: "", card: null, pending: true }]);
+
+      const base = settings.apiBaseUrl;
+      try {
+        const card = await opsApi.query(text, base);
+        if (card.card_type !== "help") {
+          patchMsg(aiId, {
+            pending: false,
+            text: card.summary ?? card.title,
+            card,
+          });
+          return;
+        }
+      } catch {
+        // ops router unreachable — fall through to language pipeline
+      }
+
+      // Fall back to the language-understanding pipeline for instructions/clarifications.
+      try {
+        const resp = await resolveXService.analyzeWithBackend(text, undefined, base);
+        const top = resp.interpretations?.[0];
+        const status = String(resp.status ?? "");
+        const direct = resp.resolved_intent?.direct_answer;
+        const summary =
+          status === "NEEDS_CLARIFICATION"
+            ? `I need a bit more detail before I can resolve that.${resp.clarification_questions?.length ? ` ${resp.clarification_questions[0]}` : ""}`
+            : direct || top?.label || top?.description || "I processed your request.";
+        patchMsg(aiId, {
+          pending: false,
+          text: summary,
+          analysis: { status, summary },
+          card: null,
+        });
+      } catch (err) {
+        patchMsg(aiId, {
+          pending: false,
+          text: `I couldn't reach the analysis service${err instanceof Error ? ` (${err.message})` : ""}. Please check that the backend is running, or try a business question like "Which orders might be delayed?"`,
+        });
+      }
+    },
+    [settings.apiBaseUrl, patchMsg],
+  );
+
+  const newChat = useCallback(() => {
+    setMessages([{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }]);
+    inputRef.current?.focus();
+  }, []);
+
+  const navItems = [
+    { to: "/inventory", label: "Inventory", icon: Package },
+    { to: "/warehouse", label: "Warehouse", icon: Warehouse },
+    { to: "/orders", label: "Orders", icon: Truck },
+    { to: "/suppliers", label: "Suppliers", icon: Users },
+    { to: "/settings", label: "Settings", icon: SettingsIcon },
+  ] as const;
 
   return (
-    <div className="pb-20">
-      {/* Hero with 3D-Inspired Intelligence Sphere */}
-      <section className="relative pt-10 pb-14 sm:pt-16 sm:pb-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <motion.div
-              initial={settings.reduceMotion ? false : { opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: settings.reduceMotion ? 0 : 0.4 }}
-              className="lg:col-span-7 space-y-5 text-center lg:text-left"
-            >
-              <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-xs font-medium text-violet-200">
-                <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                <span>Language Intelligence + Smart Inventory Operations</span>
-              </div>
-
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.08]">
-                Understand the Unclear.{" "}
-                <span className="bg-gradient-to-r from-violet-400 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">
-                  Resolve the Intent.
-                </span>
-              </h1>
-
-              <p className="text-sm font-medium text-cyan-300">
-                Not Everything You Say Is What You Mean.
-              </p>
-
-              <p className="max-w-2xl mx-auto lg:mx-0 text-base sm:text-lg leading-relaxed text-slate-300">
-                An intelligent system that identifies ambiguity in natural language, simulates
-                What-If interpretations, asks priority-ranked questions, and connects resolved
-                intent directly into smart inventory & CRD operations.
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1">
-                <Button
-                  size="lg"
-                  onClick={() => void navigate({ to: "/workspace" })}
-                  iconRight={<ArrowRight className="h-4 w-4" />}
-                >
-                  Start Resolving
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => void navigate({ to: "/inventory" })}
-                  iconLeft={<Package className="h-4 w-4 text-cyan-400" />}
-                >
-                  Open Inventory Hub
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => void navigate({ to: "/how-it-works" })}
-                >
-                  Explore How It Works
-                </Button>
-              </div>
-            </motion.div>
-
-            <div className="lg:col-span-5">
-              <IntelligenceSphere3D reduceMotion={settings.reduceMotion} />
-            </div>
+    <div className="flex h-screen bg-slate-100">
+      {/* Left sidebar */}
+      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-900 text-slate-200">
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400"><Bot size={20} /></div>
+          <div>
+            <div className="text-sm font-bold text-white">ResolveX</div>
+            <div className="text-[11px] text-slate-400">Understand the Unclear. Resolve the Intent.</div>
           </div>
+        </div>
+        <button
+          onClick={newChat}
+          className="mx-4 mb-3 flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+        >
+          <Plus size={16} /> New conversation
+        </button>
+        <div className="flex-1 overflow-y-auto px-3">
+          <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">History</div>
+          {history.length === 0 && <p className="px-2 text-xs text-slate-500">No past conversations yet.</p>}
+          {history.slice(0, 20).map((h) => (
+            <button key={h.id} onClick={newChat} className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800">
+              <MessageSquare size={12} className="shrink-0 text-slate-500" />
+              <span className="truncate">{h.title}</span>
+            </button>
+          ))}
+        </div>
+        <nav className="border-t border-slate-800 p-3">
+          {navItems.map((item) => (
+            <Link key={item.to} to={item.to} className="mb-0.5 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-white">
+              <item.icon size={16} /> {item.label}
+            </Link>
+          ))}
+          <div className="mt-2 flex items-center justify-between rounded-md bg-slate-800/70 px-2.5 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-xs font-medium text-white">{activeRole}</div>
+              <div className="text-[10px] text-slate-400">{mapDemoRoleToBackendHeader(activeRole)}</div>
+            </div>
+            <ChevronRight size={14} className="text-slate-500" />
+          </div>
+        </nav>
+      </aside>
 
-          {/* Interactive Prompt Input Workspace */}
-          <div className="mx-auto mt-12 max-w-5xl space-y-5">
-            <PromptInputCard
-              prompt={promptInput}
-              onPromptChange={setPromptInput}
-              domain={domain}
-              onDomainChange={setDomain}
-              strictness={strictness}
-              onStrictnessChange={setStrictness}
-              language={language}
-              onLanguageChange={setLanguage}
-              isAnalyzing={isAnalyzing}
-              onAnalyze={handleAnalyze}
-              onSelectExample={async (id) => {
-                try {
-                  await selectExamplePrompt(id);
-                  setHasAnalyzedHere(true);
-                } catch {
-                  // apiError surfaced cleanly in UI
-                }
-              }}
-              onSelectMultilingualSample={async (id) => {
-                try {
-                  await selectMultilingualSample(id);
-                  setHasAnalyzedHere(true);
-                } catch {
-                  // apiError surfaced cleanly in UI
-                }
-              }}
-              showControls={false}
-              showExamples={true}
-              analyzeLabel="Analyze Prompt"
-            />
+      {/* Main chat */}
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+          <div>
+            <h1 className="text-base font-semibold text-slate-900">Business Assistant</h1>
+            <p className="text-xs text-slate-500">Answers use live inventory, warehouse, supplier and order data.</p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">● Live data</span>
+        </header>
 
-            {apiError && (
-              <div
-                role="alert"
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs sm:text-sm text-rose-100"
-              >
-                <span>{apiError}</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={clearApiError}>
-                    Dismiss
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void navigate({ to: "/settings" })}
-                  >
-                    Check Settings
-                  </Button>
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+          <div className="mx-auto max-w-3xl space-y-5">
+            {messages.map((m) => (
+              <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] ${m.role === "user" ? "order-2" : ""}`}>
+                  {m.role === "assistant" && (
+                    <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                      <Bot size={14} className="text-cyan-600" /> ResolveX
+                    </div>
+                  )}
+                  {m.pending ? (
+                    <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm text-slate-500 shadow-sm">
+                      <Loader2 size={15} className="animate-spin" /> Thinking…
+                    </div>
+                  ) : (
+                    <div className={`whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${m.role === "user" ? "rounded-tr-sm bg-cyan-600 text-white" : "rounded-tl-sm bg-white text-slate-800"}`}>
+                      {m.text}
+                    </div>
+                  )}
+                  {m.card && !m.pending && <div className="mt-3"><OpsCardView card={m.card} /></div>}
+                  {m.analysis && m.analysis.status === "NEEDS_CLARIFICATION" && (
+                    <Link to="/clarification" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:underline">
+                      Open clarification flow <ChevronRight size={12} />
+                    </Link>
+                  )}
                 </div>
+              </div>
+            ))}
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* Composer */}
+        <div className="border-t border-slate-200 bg-white px-4 pb-4 pt-3 sm:px-8">
+          <div className="mx-auto max-w-3xl">
+            {messages.length <= 2 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} onClick={() => void send(s)} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800">
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
-
-            <AnalysisProgressBanner
-              isAnalyzing={isAnalyzing}
-              activeStage={analysisStage}
-              stageLabel={analysisStageLabel}
-            />
-
-            {/* Analysis Preview */}
-            <Card className="border-cyan-500/20 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <Badge tone={!activeAnalysis.isDemoData ? "emerald" : "cyan"}>
-                    {!activeAnalysis.isDemoData
-                      ? `LIVE RESULT (${activeAnalysis.backendData?.status ?? "ANALYZED"})`
-                      : hasAnalyzedHere
-                        ? "SIMULATED FALLBACK"
-                        : "SAMPLE ANALYSIS PREVIEW"}
-                  </Badge>
-                  <Badge tone="violet">
-                    {activeAnalysis.multilingual.detectedLanguage}
-                    {activeAnalysis.multilingual.isCodeMixed ? " • Code-Mixed" : ""}
-                  </Badge>
-                  <span className="text-xs text-slate-400">
-                    Domain: <strong className="text-slate-200">{activeAnalysis.domain}</strong>
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 font-mono text-rose-200">
-                    Ambiguity: {activeAnalysis.ambiguityScore}%
-                  </span>
-                  <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-mono text-amber-200">
-                    Risk: {activeAnalysis.riskLevel}
-                  </span>
-                </div>
-              </div>
-
-              <PromptHighlighter
-                prompt={activeAnalysis.prompt}
-                spans={activeAnalysis.spans}
-                onSelectSpan={() => void navigate({ to: "/visualization" })}
+            <form
+              onSubmit={(e) => { e.preventDefault(); void send(input); }}
+              className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-cyan-500"
+            >
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(input); } }}
+                rows={1}
+                placeholder="Ask about stock, storage, suppliers, orders…"
+                className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
               />
-
-              {activeAnalysis.multilingual.detectedLanguage !== "English" && (
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/8 px-3.5 py-2.5 text-xs text-slate-200">
-                  <span className="font-semibold text-cyan-300 mr-1.5">
-                    Normalized Meaning (Separate):
-                  </span>
-                  {activeAnalysis.multilingual.normalizedEnglishMeaning}
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <p className="text-xs sm:text-sm text-slate-300">{activeAnalysis.summary}</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    iconLeft={<Eye className="h-3.5 w-3.5 text-cyan-400" />}
-                    onClick={() => void navigate({ to: "/visualization" })}
-                  >
-                    Context Graph
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void navigate({ to: "/analysis" })}
-                    iconRight={<ArrowRight className="h-3.5 w-3.5" />}
-                  >
-                    Inspect Full Analysis
-                  </Button>
-                </div>
-              </div>
-            </Card>
+              <button type="submit" disabled={!input.trim()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-500 disabled:opacity-40" aria-label="Send">
+                <Send size={16} />
+              </button>
+            </form>
+            <p className="mt-2 flex items-center gap-1 text-[11px] text-slate-400">
+              <AlertCircle size={11} /> Consequential actions like purchase-order approval always require an authorized role.
+            </p>
           </div>
         </div>
-      </section>
-
-      {/* 3-Stage Overview */}
-      <section className="py-12">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-          <SectionHeader
-            eyebrow="Three Core Stages"
-            title="From Underspecified Language to Verified Action"
-            align="center"
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {THREE_STAGES.map((stage) => {
-              const Icon = stage.icon;
-              return (
-                <Card key={stage.step} hover className="flex flex-col justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge tone="cyan">{stage.step}</Badge>
-                      <Icon className="h-5 w-5 text-violet-300" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white">{stage.title}</h3>
-                    <p className="text-sm text-slate-400 leading-relaxed">{stage.description}</p>
-                  </div>
-                  <Link
-                    to={stage.to}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
-                  >
-                    <span>Explore stage</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Unified Capabilities */}
-      <section className="py-12">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-          <SectionHeader
-            eyebrow="Unified Platform"
-            title="Language Intelligence Meets Smart Inventory Operations"
-            description="Every module shares one assistant, unified analytics, and consistent design tokens."
-            actions={
-              <Button
-                variant="outline"
-                onClick={() => void navigate({ to: "/evaluation" })}
-                iconLeft={<Layers className="h-4 w-4" />}
-              >
-                Unified Analytics
-              </Button>
-            }
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {FEATURE_CARDS.map((feature) => {
-              const Icon = feature.icon;
-              return (
-                <Card key={feature.title} hover className="flex flex-col justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Icon className="h-5 w-5 text-cyan-400" />
-                      <Badge tone="violet">{feature.badge}</Badge>
-                    </div>
-                    <h3 className="text-base font-semibold text-white">{feature.title}</h3>
-                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                  <Link
-                    to={feature.to}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-cyan-200"
-                  >
-                    <span>Open module</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                </Card>
-              );
-            })}
-          </div>
-
-          <DemoBanner />
-        </div>
-      </section>
+      </main>
     </div>
   );
 }

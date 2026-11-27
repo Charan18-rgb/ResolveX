@@ -7,6 +7,7 @@ import {
   Languages,
   Play,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
@@ -28,7 +29,7 @@ import { Card } from "@/components/resolvex/Card";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { useResolveX } from "@/context/useResolveX";
-import { resolveXService } from "@/services/api";
+import { mapDemoRoleToBackendHeader, resolveXService } from "@/services/api";
 import type { BackendPs2Evaluation, BackendPs6Evaluation } from "@/types/resolvex";
 
 export const Route = createFileRoute("/evaluation")({
@@ -38,7 +39,9 @@ export const Route = createFileRoute("/evaluation")({
 type EvalDomainTab = "adversarial" | "ps6" | "ps2";
 
 function EvaluationPage() {
-  const { settings } = useResolveX();
+  const { settings, activeRole } = useResolveX();
+  const roleHeader = mapDemoRoleToBackendHeader(activeRole);
+  const isOperator = roleHeader === "ADMIN";
   const [activeTab, setActiveTab] = useState<EvalDomainTab>("adversarial");
   const [ps2Eval, setPs2Eval] = useState<BackendPs2Evaluation | null>(null);
   const [ps6Eval, setPs6Eval] = useState<BackendPs6Evaluation | null>(null);
@@ -52,8 +55,8 @@ function EvaluationPage() {
     setIsLoadingPs2(true);
     try {
       const [r2, r6] = await Promise.all([
-        resolveXService.getPs2Evaluation(true, settings.apiBaseUrl),
-        resolveXService.getPs6Evaluation(false, settings.apiBaseUrl),
+        resolveXService.getPs2Evaluation(true, settings.apiBaseUrl, roleHeader),
+        resolveXService.getPs6Evaluation(false, settings.apiBaseUrl, roleHeader),
       ]);
       setPs2Eval(r2.evaluation);
       setPs6Eval(r6.evaluation);
@@ -65,7 +68,7 @@ function EvaluationPage() {
     } finally {
       setIsLoadingPs2(false);
     }
-  }, [settings.apiBaseUrl]);
+  }, [settings.apiBaseUrl, roleHeader]);
 
   useEffect(() => {
     void loadEvaluations();
@@ -76,7 +79,7 @@ function EvaluationPage() {
     setIsRunningPs6(true);
     setErrorMsg(null);
     try {
-      const res = await resolveXService.getPs6Evaluation(true, settings.apiBaseUrl);
+      const res = await resolveXService.getPs6Evaluation(true, settings.apiBaseUrl, roleHeader);
       setPs6Eval(res.evaluation);
       setPs6Source(res.source);
     } catch (err) {
@@ -114,6 +117,22 @@ function EvaluationPage() {
         { metric: "Resolution Acc.", value: Math.round(ps6Eval.resolution_accuracy * 100) },
       ]
     : [];
+
+  if (!isOperator) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+          <ShieldAlert className="h-7 w-7 text-slate-400" />
+        </div>
+        <h1 className="text-xl font-semibold text-slate-900">Operator area</h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Evaluation metrics and diagnostics are restricted to authorized operators.
+          Your current role is <span className="font-medium">{activeRole}</span>. Switch to the
+          System Operator role to access this area.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">

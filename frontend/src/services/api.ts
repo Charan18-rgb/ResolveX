@@ -109,6 +109,8 @@ export function mapDemoRoleToBackendHeader(role: UserDemoRole): BackendApiRoleHe
       return "PROCUREMENT_MANAGER";
     case "Operations Manager":
       return "OPERATIONS_MANAGER";
+    case "System Operator":
+      return "ADMIN";
     case "Inventory Planner":
     default:
       return "INVENTORY_PLANNER";
@@ -762,18 +764,25 @@ export const resolveXService = {
   async getPs2Evaluation(
     runNow = true,
     baseUrl?: string,
+    roleHeader?: BackendApiRoleHeader,
   ): Promise<{ source: string; evaluation: BackendPs2Evaluation }> {
-    return requestFastApi(baseUrl, `${API_ENDPOINTS.evalPs2}?run_now=${runNow ? "true" : "false"}`);
+    return requestFastApi(baseUrl, `${API_ENDPOINTS.evalPs2}?run_now=${runNow ? "true" : "false"}`, {
+      headers: roleHeader ? { "X-User-Role": roleHeader } : {},
+    });
   },
 
   async getPs6Evaluation(
     runNow = false,
     baseUrl?: string,
+    roleHeader?: BackendApiRoleHeader,
   ): Promise<{ source: string; message?: string; evaluation: BackendPs6Evaluation | null }> {
     return requestFastApi(
       baseUrl,
       `${API_ENDPOINTS.evalPs6}?run_now=${runNow ? "true" : "false"}`,
-      { timeoutMs: runNow ? 120000 : 12000 },
+      {
+        timeoutMs: runNow ? 120000 : 12000,
+        headers: roleHeader ? { "X-User-Role": roleHeader } : {},
+      },
     );
   },
 

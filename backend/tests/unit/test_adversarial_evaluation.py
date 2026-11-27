@@ -157,7 +157,10 @@ def test_evaluation_api_endpoint_supports_adversarial_run(
                 "app.services.gemini_service.call_gemini_structured",
                 side_effect=_mock_smart_gemini,
             ):
-                resp = client.get("/api/evaluation/ps6?run_now=true&adversarial_only=true")
+                resp = client.get(
+                    "/api/evaluation/ps6?run_now=true&adversarial_only=true",
+                    headers={"X-User-Role": "ADMIN"},
+                )
         assert resp.status_code == 200
         body = resp.json()
         assert body["source"] == "fresh_run"

@@ -146,6 +146,51 @@ CREATE INDEX IF NOT EXISTS idx_alerts_type_ack ON inventory_alerts(alert_type, a
 CREATE INDEX IF NOT EXISTS idx_proposals_status ON purchase_order_proposals(status, created_at DESC);
 """
 
+OPS_MIGRATIONS_SQL = """
+CREATE TABLE IF NOT EXISTS warehouses (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS storage_locations (
+    id TEXT PRIMARY KEY,
+    warehouse_id TEXT NOT NULL,
+    zone_code TEXT NOT NULL,
+    rack_code TEXT NOT NULL,
+    shelf_code TEXT NOT NULL,
+    position_index INTEGER NOT NULL DEFAULT 0,
+    capacity_units REAL NOT NULL DEFAULT 0.0,
+    material_id TEXT NULL,
+    stored_qty REAL NOT NULL DEFAULT 0.0,
+    incoming_qty REAL NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'AVAILABLE',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS supplier_deliveries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id TEXT NOT NULL,
+    delivery_ref TEXT NOT NULL UNIQUE,
+    material_id TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    expected_date TEXT NOT NULL,
+    actual_date TEXT NULL,
+    status TEXT NOT NULL,
+    delay_days REAL NOT NULL DEFAULT 0.0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_locations_zone ON storage_locations(warehouse_id, zone_code, rack_code, shelf_code);
+CREATE INDEX IF NOT EXISTS idx_locations_material ON storage_locations(material_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_supplier ON supplier_deliveries(supplier_id, expected_date DESC);
+"""
+
 
 def run_migrations(db_path: str) -> None:
     """Apply PS2 schema migrations idempotently without dropping existing data."""
@@ -155,5 +200,12 @@ def run_migrations(db_path: str) -> None:
             """
             INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
             VALUES (1, 'Initial PS2 inventory, orders, procurement, alerts, and audit tables', datetime('now'));
+            """
+        )
+        conn.executescript(OPS_MIGRATIONS_SQL)
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (2, 'Warehouse storage locations and supplier delivery history', datetime('now'));
             """
         )

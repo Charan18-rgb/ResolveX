@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Boxes,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +24,9 @@ import {
   SearchCheck,
   Settings,
   Sparkles,
+  Truck,
   UserCheck,
+  Users,
   X,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
@@ -52,7 +55,12 @@ const PS6_NAV = [
   { to: "/resolution", label: "Resolution", icon: CheckCircle2 },
 ] as const;
 
-const PS2_NAV = [{ to: "/inventory", label: "Inventory & CRD Hub", icon: Package }] as const;
+const PS2_NAV = [
+  { to: "/inventory", label: "Inventory", icon: Package },
+  { to: "/warehouse", label: "Warehouse", icon: Boxes },
+  { to: "/orders", label: "Orders", icon: Truck },
+  { to: "/suppliers", label: "Suppliers", icon: Users },
+] as const;
 
 const PLATFORM_NAV = [
   { to: "/evaluation", label: "Unified Analytics", icon: BarChart3 },
@@ -155,11 +163,17 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
               <Link to="/" className="text-cyan-300">
                 Home
               </Link>
-              <Link to="/workspace" className="text-slate-300 hover:text-white">
-                Workspace
+              <Link to="/warehouse" className="text-slate-300 hover:text-white">
+                Warehouse
+              </Link>
+              <Link to="/orders" className="text-slate-300 hover:text-white">
+                Orders
+              </Link>
+              <Link to="/suppliers" className="text-slate-300 hover:text-white">
+                Suppliers
               </Link>
               <Link to="/inventory" className="text-slate-300 hover:text-white">
-                Inventory Hub
+                Inventory
               </Link>
               <Link to="/how-it-works" className="text-slate-300 hover:text-white">
                 How It Works
@@ -212,18 +226,32 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
           {landingMenuOpen && (
             <div className="lg:hidden border-t border-white/10 bg-[#070b1a] px-4 py-4 grid grid-cols-2 gap-2 text-sm">
               <Link
-                to="/workspace"
+                to="/warehouse"
                 onClick={() => setLandingMenuOpen(false)}
                 className="rounded-lg px-3 py-2 text-slate-200 hover:bg-white/5"
               >
-                Workspace
+                Warehouse
+              </Link>
+              <Link
+                to="/orders"
+                onClick={() => setLandingMenuOpen(false)}
+                className="rounded-lg px-3 py-2 text-slate-200 hover:bg-white/5"
+              >
+                Orders
+              </Link>
+              <Link
+                to="/suppliers"
+                onClick={() => setLandingMenuOpen(false)}
+                className="rounded-lg px-3 py-2 text-slate-200 hover:bg-white/5"
+              >
+                Suppliers
               </Link>
               <Link
                 to="/inventory"
                 onClick={() => setLandingMenuOpen(false)}
                 className="rounded-lg px-3 py-2 text-slate-200 hover:bg-white/5"
               >
-                Inventory Hub
+                Inventory
               </Link>
               <Link
                 to="/how-it-works"

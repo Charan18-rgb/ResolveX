@@ -4,6 +4,7 @@ Evaluation API routes — language and inventory benchmark endpoints.
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.ops_routes import require_operator
 from app.config import Settings, get_settings
 from app.database import operations as db_ops
 
@@ -14,6 +15,7 @@ evaluation_router = APIRouter(prefix="/api/evaluation", tags=["Evaluation"])
 def get_ps6_evaluation(
     run_now: bool = False,
     adversarial_only: bool = False,
+    _role: str = Depends(require_operator),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
@@ -45,6 +47,7 @@ def get_ps6_evaluation(
 @evaluation_router.get("/ps2")
 def get_ps2_evaluation(
     run_now: bool = False,
+    _role: str = Depends(require_operator),
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """

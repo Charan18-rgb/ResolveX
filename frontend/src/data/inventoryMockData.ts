@@ -32,6 +32,13 @@ export const DEMO_ROLES: Array<{
     focusSummary: "Tracks expedited customer orders, CRD slippage, and cross-team clarifications.",
     primaryTab: "orders",
   },
+  {
+    role: "System Operator",
+    headline: "Evaluation, Diagnostics & System Analytics",
+    focusSummary:
+      "Restricted operator access to language benchmarks, adversarial tests, and system health metrics.",
+    primaryTab: "orders",
+  },
 ];
 
 export const INITIAL_INVENTORY_MATERIALS: InventoryMaterial[] = [

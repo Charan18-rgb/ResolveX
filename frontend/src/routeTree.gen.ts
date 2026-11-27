@@ -16,9 +16,12 @@ import { Route as EvaluationRouteImport } from './routes/evaluation'
 import { Route as HowItWorksRouteImport } from './routes/how-it-works'
 import { Route as InterpretationsRouteImport } from './routes/interpretations'
 import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as ResolutionRouteImport } from './routes/resolution'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SuppliersRouteImport } from './routes/suppliers'
 import { Route as VisualizationRouteImport } from './routes/visualization'
+import { Route as WarehouseRouteImport } from './routes/warehouse'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 
 const IndexRoute = IndexRouteImport.update({
@@ -56,6 +59,11 @@ const InventoryRoute = InventoryRouteImport.update({
   path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResolutionRoute = ResolutionRouteImport.update({
   id: '/resolution',
   path: '/resolution',
@@ -66,9 +74,19 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SuppliersRoute = SuppliersRouteImport.update({
+  id: '/suppliers',
+  path: '/suppliers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VisualizationRoute = VisualizationRouteImport.update({
   id: '/visualization',
   path: '/visualization',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WarehouseRoute = WarehouseRouteImport.update({
+  id: '/warehouse',
+  path: '/warehouse',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorkspaceRoute = WorkspaceRouteImport.update({
@@ -85,9 +103,12 @@ export interface FileRoutesByFullPath {
   '/how-it-works': typeof HowItWorksRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
+  '/orders': typeof OrdersRoute
   '/resolution': typeof ResolutionRoute
   '/settings': typeof SettingsRoute
+  '/suppliers': typeof SuppliersRoute
   '/visualization': typeof VisualizationRoute
+  '/warehouse': typeof WarehouseRoute
   '/workspace': typeof WorkspaceRoute
 }
 export interface FileRoutesByTo {
@@ -98,9 +119,12 @@ export interface FileRoutesByTo {
   '/how-it-works': typeof HowItWorksRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
+  '/orders': typeof OrdersRoute
   '/resolution': typeof ResolutionRoute
   '/settings': typeof SettingsRoute
+  '/suppliers': typeof SuppliersRoute
   '/visualization': typeof VisualizationRoute
+  '/warehouse': typeof WarehouseRoute
   '/workspace': typeof WorkspaceRoute
 }
 export interface FileRoutesById {
@@ -112,9 +136,12 @@ export interface FileRoutesById {
   '/how-it-works': typeof HowItWorksRoute
   '/interpretations': typeof InterpretationsRoute
   '/inventory': typeof InventoryRoute
+  '/orders': typeof OrdersRoute
   '/resolution': typeof ResolutionRoute
   '/settings': typeof SettingsRoute
+  '/suppliers': typeof SuppliersRoute
   '/visualization': typeof VisualizationRoute
+  '/warehouse': typeof WarehouseRoute
   '/workspace': typeof WorkspaceRoute
 }
 export interface FileRouteTypes {
@@ -127,9 +154,12 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/interpretations'
     | '/inventory'
+    | '/orders'
     | '/resolution'
     | '/settings'
+    | '/suppliers'
     | '/visualization'
+    | '/warehouse'
     | '/workspace'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -140,9 +170,12 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/interpretations'
     | '/inventory'
+    | '/orders'
     | '/resolution'
     | '/settings'
+    | '/suppliers'
     | '/visualization'
+    | '/warehouse'
     | '/workspace'
   id:
     | '__root__'
@@ -153,9 +186,12 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/interpretations'
     | '/inventory'
+    | '/orders'
     | '/resolution'
     | '/settings'
+    | '/suppliers'
     | '/visualization'
+    | '/warehouse'
     | '/workspace'
   fileRoutesById: FileRoutesById
 }
@@ -167,9 +203,12 @@ export interface RootRouteChildren {
   HowItWorksRoute: typeof HowItWorksRoute
   InterpretationsRoute: typeof InterpretationsRoute
   InventoryRoute: typeof InventoryRoute
+  OrdersRoute: typeof OrdersRoute
   ResolutionRoute: typeof ResolutionRoute
   SettingsRoute: typeof SettingsRoute
+  SuppliersRoute: typeof SuppliersRoute
   VisualizationRoute: typeof VisualizationRoute
+  WarehouseRoute: typeof WarehouseRoute
   WorkspaceRoute: typeof WorkspaceRoute
 }
 
@@ -224,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/resolution': {
       id: '/resolution'
       path: '/resolution'
@@ -238,11 +284,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/suppliers': {
+      id: '/suppliers'
+      path: '/suppliers'
+      fullPath: '/suppliers'
+      preLoaderRoute: typeof SuppliersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/visualization': {
       id: '/visualization'
       path: '/visualization'
       fullPath: '/visualization'
       preLoaderRoute: typeof VisualizationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/warehouse': {
+      id: '/warehouse'
+      path: '/warehouse'
+      fullPath: '/warehouse'
+      preLoaderRoute: typeof WarehouseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/workspace': {
@@ -263,9 +323,12 @@ const rootRouteChildren: RootRouteChildren = {
   HowItWorksRoute: HowItWorksRoute,
   InterpretationsRoute: InterpretationsRoute,
   InventoryRoute: InventoryRoute,
+  OrdersRoute: OrdersRoute,
   ResolutionRoute: ResolutionRoute,
   SettingsRoute: SettingsRoute,
+  SuppliersRoute: SuppliersRoute,
   VisualizationRoute: VisualizationRoute,
+  WarehouseRoute: WarehouseRoute,
   WorkspaceRoute: WorkspaceRoute,
 }
 export const routeTree = rootRouteImport

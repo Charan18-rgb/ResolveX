@@ -30,3 +30,5 @@ env/
 Thumbs.db
 *.swp
 *.tmp
+backend_run.log
+frontend_run.log

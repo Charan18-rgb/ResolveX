@@ -12,6 +12,7 @@ from app.api.alerts_routes import alerts_router
 from app.api.analysis_routes import analysis_router
 from app.api.evaluation_routes import evaluation_router
 from app.api.inventory_routes import inventory_router
+from app.api.ops_routes import ops_router
 from app.api.purchase_order_routes import procurement_router
 from app.api.routes import router
 from app.config import get_settings
@@ -20,6 +21,7 @@ from app.inventory.allocation_engine import recalculate_allocations
 from app.inventory.order_risk_engine import evaluate_order_risks
 from app.inventory.seed import seed_demo_data
 from app.inventory.shortage_detector import sync_inventory_alerts
+from app.ops.seed_ops import seed_ops_data
 from app.models.schemas import ErrorDetail, ErrorResponse
 
 
@@ -29,6 +31,7 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     init_db(settings.database_path)
     seed_demo_data(settings.database_path)
+    seed_ops_data(settings.database_path)
     recalculate_allocations(settings.database_path)
     evaluate_order_risks(settings.database_path)
     sync_inventory_alerts(settings.database_path)
@@ -106,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(inventory_router)
     app.include_router(procurement_router)
     app.include_router(alerts_router)
+    app.include_router(ops_router)
     app.include_router(evaluation_router)
     return app
 

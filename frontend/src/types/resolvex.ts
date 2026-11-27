@@ -497,7 +497,7 @@ export interface SessionHistoryItem {
   createdAt: string;
 }
 
-export type UserDemoRole = "Inventory Planner" | "Procurement Manager" | "Operations Manager";
+export type UserDemoRole = "Inventory Planner" | "Procurement Manager" | "Operations Manager" | "System Operator";
 
 export interface AppSettings {
   apiBaseUrl: string;
