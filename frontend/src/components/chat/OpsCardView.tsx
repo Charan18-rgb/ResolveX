@@ -245,6 +245,24 @@ function DeliveriesCard({ data }: { data: any }) {
   );
 }
 
+function MessageDraftCard({ data, summary }: { data: any; summary?: string | undefined }) {
+  const draft = data ?? {};
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+        <span className="rounded bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">DRAFT ONLY — NOT SENT</span>
+        {draft.recipient_confirmed === false && <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">Confirm recipient</span>}
+      </div>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="text-xs text-slate-500">To: <span className="font-medium text-slate-800">{String(draft.recipient ?? "—")}</span></div>
+        <div className="text-xs text-slate-500">Subject: <span className="font-medium text-slate-800">{String(draft.subject ?? "—")}</span></div>
+        <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-800">{String(draft.body ?? "")}</pre>
+      </div>
+      {summary && <p className="mt-2 text-xs text-slate-500">{summary}</p>}
+    </div>
+  );
+}
+
 function InventorySummaryCard({ data }: { data: any }) {
   const items = (data.materials ?? data.items ?? []) as any[];
   const low = num(data.low_stock_count); const oos = num(data.out_of_stock_count); const total = num(data.total_materials);
@@ -289,6 +307,7 @@ export function OpsCardView({ card }: { card: OpsCard }) {
       case "order_detail": return <OrderDetailCard data={d as OrderTimeline} />;
       case "purchase_orders": return <PurchaseOrdersCard data={d as { shortages: unknown[]; proposals: any[] }} />;
       case "deliveries": return <DeliveriesCard data={d} />;
+      case "message_draft": return <MessageDraftCard data={d} summary={card.summary} />;
       default: return <p className="text-sm text-slate-500">{card.summary ?? "Ask about stock, storage, suppliers, orders, or purchase orders."}</p>;
     }
   }, [card]);

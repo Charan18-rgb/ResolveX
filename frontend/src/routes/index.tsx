@@ -46,6 +46,7 @@ function HomePage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pendingClarify = useRef<{ conversationId: string } | null>(null);
+  const lastDraft = useRef<Record<string, any> | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -81,7 +82,16 @@ function HomePage() {
 
       const base = settings.apiBaseUrl;
       try {
-        const card = await opsApi.query(text, base);
+        const card = await opsApi.query(
+          text,
+          base,
+          lastDraft.current ? { last_message_draft: lastDraft.current } : undefined,
+        );
+        if (card.card_type === "message_draft") {
+          lastDraft.current = card.data as Record<string, any>;
+        } else if (card.card_type !== "help") {
+          lastDraft.current = null;
+        }
         if (card.card_type !== "help") {
           pendingClarify.current = null;
           patchMsg(aiId, {
@@ -94,6 +104,7 @@ function HomePage() {
       } catch {
         // ops router unreachable — fall through to language pipeline
       }
+      lastDraft.current = null;
 
       // Fall back to the language-understanding pipeline for instructions/clarifications.
       try {
@@ -128,6 +139,7 @@ function HomePage() {
 
   const newChat = useCallback(() => {
     pendingClarify.current = null;
+    lastDraft.current = null;
     setMessages([{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }]);
     inputRef.current?.focus();
   }, []);

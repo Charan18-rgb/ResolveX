@@ -76,6 +76,6 @@ export const opsApi = {
   compareSuppliers: (a: string, bId: string, b?: string) =>
     req<{ a: SupplierDetail; b: SupplierDetail }>(`/api/suppliers/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(bId)}`, undefined, b),
   orderTimeline: (orderId: string, b?: string) => req<OrderTimeline>(`/api/orders/${encodeURIComponent(orderId)}/timeline`, undefined, b),
-  query: (question: string, b?: string) =>
-    req<OpsCard>("/api/ops/query", { method: "POST", body: JSON.stringify({ question }) }, b),
+  query: (question: string, b?: string, context?: Record<string, any>) =>
+    req<OpsCard>("/api/ops/query", { method: "POST", body: JSON.stringify({ question, context: context ?? null }) }, b),
 };

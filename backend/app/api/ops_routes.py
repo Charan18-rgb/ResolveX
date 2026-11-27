@@ -157,6 +157,7 @@ def operator_audit_logs(
 
 class OpsQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
+    context: Optional[dict[str, Any]] = None
 
 
 _CARD_TYPES = Literal[
@@ -171,12 +172,144 @@ _CARD_TYPES = Literal[
     "order_detail",
     "purchase_orders",
     "deliveries",
+    "message_draft",
     "help",
 ]
 
 
 def _first_match(text: str, patterns: list[str]) -> bool:
     return any(p in text for p in patterns)
+
+
+# --- Communication / messaging intents (draft-only; no provider connected) ---
+
+_COMMS_PATTERNS = [
+    "message", "remind", "notify", "notification", "email",
+    "text ", "payment reminder", "deadline reminder", "follow up", "follow-up",
+]
+_FOLLOWUP_PATTERNS = [
+    "more polite", "politer", "formal", "shorter", "longer", "friendlier",
+    "send it", "send now", "send tomorrow", "schedule", "make it",
+]
+
+
+def _extract_recipient(question: str) -> Optional[str]:
+    """Best-effort recipient extraction from a communication request."""
+    import re
+    m = re.search(
+        r"(?:[Mm]essage|[Mm]sg|[Rr]emind|[Nn]otify|[Ee]mail|[Tt]ext|[Pp]ing|[Cc]all)\s+(?:to\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)",
+        question,
+    )
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"\bto\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)\b", question)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _extract_message_body(question: str) -> str:
+    """Extract the message content after 'that' or the recipient phrase."""
+    import re
+    m = re.search(r"\bthat\b(.+)$", question, flags=re.IGNORECASE | re.DOTALL)
+    if m:
+        return m.group(1).strip().rstrip("?.!")
+    m = re.search(
+        r"(?:remind|message|notify|email|text)\s+(?:a\s+|an\s+|the\s+)?([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)?\s*(?:to\s+)?(.+)$",
+        question,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if m:
+        return m.group(2).strip().rstrip("?.!")
+    # "Send a payment reminder to Ravi." → body is the clause before "to Ravi"
+    m = re.search(r"^(?:send|message|remind|notify|email|text)\s+(.+?)\s+to\s+[A-Z]", question, flags=re.IGNORECASE)
+    if m:
+        return re.sub(r"^(?:a|an|the)\s+", "", m.group(1).strip()).rstrip("?.!")
+    return question.strip()
+
+
+def _build_draft(recipient: str, body: str, tone: str = "standard") -> dict[str, Any]:
+    """Deterministic message draft. Never claims delivery — draft only."""
+    body_clean = body.strip().rstrip(".")
+    if tone == "polite":
+        greeting = f"Dear {recipient},"
+        closing = "Thank you for your prompt attention.\n\nBest regards,\nResolveX Operations"
+        middle = f"I hope this message finds you well. {body_clean[:1].upper() + body_clean[1:]}. Please let me know if you need anything else."
+    elif tone == "formal":
+        greeting = f"Dear {recipient},"
+        closing = "Sincerely,\nResolveX Operations"
+        middle = f"This is to inform you that {body_clean[0].lower() + body_clean[1:]}. We request your kind attention at the earliest convenience."
+    elif tone == "short":
+        greeting = f"Hi {recipient},"
+        closing = "Thanks,\nResolveX"
+        middle = f"{body_clean[0].upper() + body_clean[1:]}."
+    else:
+        greeting = f"Hi {recipient},"
+        closing = "Regards,\nResolveX"
+        middle = f"{body_clean[0].upper() + body_clean[1:]}."
+    return {
+        "recipient": recipient,
+        "subject": "Payment reminder" if "pay" in body_clean.lower() else "Message from ResolveX",
+        "body": f"{greeting}\n\n{middle}\n\n{closing}",
+        "tone": tone,
+        "delivery_status": "DRAFT_ONLY",
+        "delivery_note": "No messaging provider is connected. This message has been drafted only and has NOT been sent.",
+    }
+
+
+def _message_draft_card(question: str, context: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Handle communication requests and follow-up edits to a previous draft."""
+    last = (context or {}).get("last_message_draft") if context else None
+    ql = question.lower()
+
+    # Follow-up edit of an existing draft
+    if last and _first_match(ql, _FOLLOWUP_PATTERNS):
+        tone = "standard"
+        if _first_match(ql, ["polite", "politer", "formal", "friendly"]):
+            tone = "polite" if "formal" not in ql else "formal"
+        elif _first_match(ql, ["shorter", "brief"]):
+            tone = "short"
+        elif _first_match(ql, ["longer", "detail"]):
+            tone = "standard"
+        body = last.get("raw_body") or last.get("body", "")
+        recipient = last.get("recipient", "there")
+        draft = _build_draft(recipient, body, tone)
+        draft["raw_body"] = body
+        note = "Draft updated. Still not sent — no messaging provider is connected."
+        if _first_match(ql, ["send it", "send now", "send tomorrow", "schedule"]):
+            note += " Sending requires a connected messaging provider; the draft is ready when one is configured."
+        return {
+            "card_type": "message_draft",
+            "title": f"Message Draft — {recipient}",
+            "summary": note,
+            "data": draft,
+        }
+
+    # New communication request
+    recipient = _extract_recipient(question) or "there"
+    body = _extract_message_body(question)
+    single_name = len(recipient.split()) == 1 and recipient != "there"
+    draft = _build_draft(recipient, body)
+    draft["raw_body"] = body
+    draft["recipient_confirmed"] = not single_name
+
+    if single_name:
+        summary = (
+            f"I've drafted a message for {recipient}. Since only a first name was given, "
+            "please confirm the full name of the recipient. The message has NOT been sent — "
+            "no messaging provider is connected yet."
+        )
+    else:
+        summary = (
+            f"Message drafted for {recipient}. It has NOT been sent — no messaging provider "
+            "is connected. You can ask me to make it more polite or adjust it."
+        )
+    return {
+        "card_type": "message_draft",
+        "title": f"Message Draft — {recipient}",
+        "summary": summary,
+        "data": draft,
+    }
 
 
 @ops_router.post("/ops/query")
@@ -187,6 +320,19 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
     """
     q = body.question.lower()
     db = settings.database_path
+
+    # Follow-up edits to a previous message draft take priority — e.g.
+    # "make it more polite" or "send it tomorrow" contain no comms keywords.
+    last_draft = (body.context or {}).get("last_message_draft") if body.context else None
+    if last_draft and _first_match(q, _FOLLOWUP_PATTERNS):
+        return _message_draft_card(body.question, body.context)
+
+    # Communication / messaging intents first — they may contain business words
+    # like "stock" or "payment" that must not trigger inventory routing.
+    if _first_match(q, _COMMS_PATTERNS) or (
+        "send" in q and _first_match(q, ["reminder", "message", "note", "email", "text"])
+    ):
+        return _message_draft_card(body.question, body.context)
 
     # Supplier comparison first ("compare X and Y", "which supplier")
     if _first_match(q, ["compare", " vs ", " versus "]) and ("supplier" in q or "deliver" in q):
