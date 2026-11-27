@@ -170,6 +170,7 @@ _CARD_TYPES = Literal[
     "order_risks",
     "order_detail",
     "purchase_orders",
+    "deliveries",
     "help",
 ]
 
@@ -263,7 +264,53 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
         if tl:
             return {"card_type": "order_detail", "title": f"Order {order_ref} — Fulfilment Timeline", "data": tl}
 
-    if _first_match(q, ["order", "delay", "deliver", "dispatch", "shipment", "crd", "late"]):
+    # Purchase orders / procurement (checked before generic "order" keywords)
+    if _first_match(q, ["purchase order", " po ", "procurement", "reorder", "order materials", "missing materials", "create", "generate"]):
+        proposals = list_proposals(db)
+        shortages = detect_shortages(db)
+        return {
+            "card_type": "purchase_orders",
+            "title": "Procurement Status",
+            "summary": f"{len(shortages)} material shortage(s); {sum(1 for p in proposals if p.status == 'PENDING_APPROVAL')} proposal(s) awaiting approval.",
+            "data": {"shortages": shortages, "proposals": [p.model_dump() for p in proposals]},
+        }
+
+    # Expected / incoming deliveries
+    if _first_match(q, ["expected", "incoming delivery", "deliveries", "arrival", "shipment arriving"]):
+        with get_connection(db) as conn:
+            rows = conn.execute(
+                """
+                SELECT d.delivery_ref, d.quantity, d.expected_date, d.status, d.delay_days,
+                       m.name AS material_name, m.sku AS material_sku, s.name AS supplier_name
+                FROM supplier_deliveries d
+                JOIN materials m ON m.id = d.material_id
+                JOIN suppliers s ON s.id = d.supplier_id
+                WHERE d.status IN ('PENDING','IN_TRANSIT')
+                ORDER BY d.expected_date ASC LIMIT 25;
+                """
+            ).fetchall()
+        deliveries = [dict(r) for r in rows]
+        return {
+            "card_type": "deliveries",
+            "title": "Expected Deliveries",
+            "summary": (
+                f"{len(deliveries)} inbound delivery(ies) recorded, next expected {deliveries[0]['expected_date']}"
+                if deliveries else "No pending inbound deliveries are recorded."
+            ),
+            "data": {"deliveries": deliveries},
+        }
+
+    # Shortages / low stock
+    if _first_match(q, ["shortage", "running low", "low stock", "out of stock", "which products", "reorder point"]):
+        shortages = detect_shortages(db)
+        return {
+            "card_type": "shortages",
+            "title": "Stock Shortages",
+            "summary": f"{len(shortages)} material(s) are below their reorder threshold or fully out of stock.",
+            "data": shortages,
+        }
+
+    if _first_match(q, ["order", "delay", "deliver", "dispatch", "shipment", "crd", "late", "pending order"]):
         risks = []
         from app.inventory.order_risk_engine import evaluate_order_risks
         risks = evaluate_order_risks(db)
@@ -276,19 +323,8 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
             "data": {"orders": [r.model_dump() for r in risks]},
         }
 
-    # Purchase orders / procurement
-    if _first_match(q, ["purchase order", " po ", "procurement", "reorder", "order materials", "missing materials", "shortage"]):
-        proposals = list_proposals(db)
-        shortages = detect_shortages(db)
-        return {
-            "card_type": "purchase_orders",
-            "title": "Procurement Status",
-            "summary": f"{len(shortages)} material shortage(s); {sum(1 for p in proposals if p.status == 'PENDING_APPROVAL')} proposal(s) awaiting approval.",
-            "data": {"shortages": shortages, "proposals": [p.model_dump() for p in proposals]},
-        }
-
     # Stock / inventory
-    if _first_match(q, ["stock", "inventory", "available", "quantity", "how much", "running low", "low stock", "out of stock"]):
+    if _first_match(q, ["stock", "inventory", "available", "quantity", "how much", "overview"]):
         from app.inventory.availability_calculator import get_inventory_overview
         ov = get_inventory_overview(db)
         return {

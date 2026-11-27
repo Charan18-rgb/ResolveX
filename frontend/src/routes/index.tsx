@@ -45,6 +45,7 @@ function HomePage() {
   const [history, setHistory] = useState<{ id: string; title: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const pendingClarify = useRef<{ conversationId: string } | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -54,8 +55,13 @@ function HomePage() {
     resolveXService
       .listConversations(15, 0, settings.apiBaseUrl)
       .then((res) => {
-        const convs = (res.conversations ?? []) as { id: string; title?: string; preview?: string }[];
-        setHistory(convs.map((c) => ({ id: c.id, title: c.title || c.preview || "Conversation" })));
+        const convs = res.conversations ?? [];
+        setHistory(
+          convs.map((c) => ({
+            id: c.id,
+            title: c.original_instruction?.slice(0, 60) || "Conversation",
+          })),
+        );
       })
       .catch(() => setHistory([]));
   }, [settings.apiBaseUrl]);
@@ -77,6 +83,7 @@ function HomePage() {
       try {
         const card = await opsApi.query(text, base);
         if (card.card_type !== "help") {
+          pendingClarify.current = null;
           patchMsg(aiId, {
             pending: false,
             text: card.summary ?? card.title,
@@ -90,7 +97,12 @@ function HomePage() {
 
       // Fall back to the language-understanding pipeline for instructions/clarifications.
       try {
-        const resp = await resolveXService.analyzeWithBackend(text, undefined, base);
+        // Multi-turn: if the previous turn asked for clarification, continue that conversation.
+        const resp = pendingClarify.current
+          ? await resolveXService.clarifyWithBackend(pendingClarify.current.conversationId, text, base)
+          : await resolveXService.analyzeWithBackend(text, undefined, base);
+        pendingClarify.current =
+          resp.status === "NEEDS_CLARIFICATION" ? { conversationId: resp.conversation_id } : null;
         const top = resp.interpretations?.[0];
         const status = String(resp.status ?? "");
         const direct = resp.resolved_intent?.direct_answer;
@@ -115,6 +127,7 @@ function HomePage() {
   );
 
   const newChat = useCallback(() => {
+    pendingClarify.current = null;
     setMessages([{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }]);
     inputRef.current?.focus();
   }, []);
@@ -131,7 +144,7 @@ function HomePage() {
   return (
     <div className="flex h-screen bg-slate-100">
       {/* Left sidebar */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-900 text-slate-200">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-900 text-slate-200 md:flex">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400"><Bot size={20} /></div>
           <div>
@@ -173,7 +186,16 @@ function HomePage() {
 
       {/* Main chat */}
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
+        {/* Mobile nav strip (sidebar hidden below md) */}
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-900 px-3 py-2 md:hidden">
+          <span className="mr-2 text-sm font-bold text-white">ResolveX</span>
+          {navItems.map((item) => (
+            <Link key={item.to} to={item.to} className="flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white">
+              <item.icon size={14} /> {item.label}
+            </Link>
+          ))}
+        </div>
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
           <div>
             <h1 className="text-base font-semibold text-slate-900">Business Assistant</h1>
             <p className="text-xs text-slate-500">Answers use live inventory, warehouse, supplier and order data.</p>

@@ -223,6 +223,28 @@ function PurchaseOrdersCard({ data }: { data: { shortages: unknown[]; proposals:
   );
 }
 
+function DeliveriesCard({ data }: { data: any }) {
+  const rows = (data?.deliveries ?? []) as any[];
+  if (rows.length === 0) return <p className="text-sm text-slate-500">No pending inbound deliveries are recorded.</p>;
+  return (
+    <table className="w-full">
+      <thead className="border-b border-slate-200"><tr><th className={th}>Delivery</th><th className={th}>Material</th><th className={th}>Qty</th><th className={th}>Supplier</th><th className={th}>Expected</th><th className={th}>Status</th></tr></thead>
+      <tbody className="divide-y divide-slate-100">
+        {rows.map((r, i) => (
+          <tr key={i}>
+            <td className={td}>{String(r.delivery_ref ?? "—")}</td>
+            <td className={td}><div className="font-medium">{String(r.material_name ?? "—")}</div><div className="text-xs text-slate-400">{String(r.material_sku ?? "")}</div></td>
+            <td className={td}>{num(r.quantity)}</td>
+            <td className={td}>{String(r.supplier_name ?? "—")}</td>
+            <td className={td}>{String(r.expected_date ?? "—")}</td>
+            <td className={td}><span className="rounded bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700">{String(r.status ?? "").replace(/_/g, " ")}</span></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function InventorySummaryCard({ data }: { data: any }) {
   const items = (data.materials ?? data.items ?? []) as any[];
   const low = num(data.low_stock_count); const oos = num(data.out_of_stock_count); const total = num(data.total_materials);
@@ -266,6 +288,7 @@ export function OpsCardView({ card }: { card: OpsCard }) {
       case "order_risks": return <OrderRisksCard data={d as { orders: any[] }} />;
       case "order_detail": return <OrderDetailCard data={d as OrderTimeline} />;
       case "purchase_orders": return <PurchaseOrdersCard data={d as { shortages: unknown[]; proposals: any[] }} />;
+      case "deliveries": return <DeliveriesCard data={d} />;
       default: return <p className="text-sm text-slate-500">{card.summary ?? "Ask about stock, storage, suppliers, orders, or purchase orders."}</p>;
     }
   }, [card]);
@@ -287,14 +310,16 @@ function ShortagesCard({ data }: { data: unknown }) {
   if (rows.length === 0) return <p className="text-sm text-slate-500">No material shortages detected.</p>;
   return (
     <table className="w-full">
-      <thead className="border-b border-slate-200"><tr><th className={th}>Material</th><th className={th}>Required</th><th className={th}>Available</th><th className={th}>Shortage</th></tr></thead>
+      <thead className="border-b border-slate-200"><tr><th className={th}>Material</th><th className={th}>On hand</th><th className={th}>Incoming</th><th className={th}>Net available</th><th className={th}>Unmet demand</th><th className={th}>Suggested buy</th></tr></thead>
       <tbody className="divide-y divide-slate-100">
         {rows.map((r, i) => (
           <tr key={i}>
             <td className={td}><div className="font-medium">{String(r.material_name ?? r.material_id ?? r.name ?? "—")}</div><div className="text-xs text-slate-400">{String(r.sku ?? r.material_id ?? "")}</div></td>
-            <td className={td}>{num(r.required_qty ?? r.required)}</td>
-            <td className={td}>{num(r.available_qty ?? r.available)}</td>
-            <td className={`${td} font-semibold text-red-600`}>{num(r.shortage_qty ?? r.shortage)}</td>
+            <td className={td}>{num(r.on_hand ?? r.on_hand_qty)}</td>
+            <td className={td}>{num(r.incoming ?? r.incoming_qty)}</td>
+            <td className={td}>{num(r.net_availability ?? r.available_qty ?? r.available)}</td>
+            <td className={`${td} font-semibold text-red-600`}>{num(r.unmet_order_demand ?? r.shortage_qty ?? r.shortage)}</td>
+            <td className={td}>{num(r.recommended_purchase_qty ?? r.recommended_qty)}</td>
           </tr>
         ))}
       </tbody>
