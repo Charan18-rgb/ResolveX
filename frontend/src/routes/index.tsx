@@ -96,58 +96,60 @@ function HomePage() {
 
       const base = settings.apiBaseUrl;
       try {
-        const card = await opsApi.query(
-          text,
-          base,
-          lastDraft.current ? { last_message_draft: lastDraft.current } : undefined,
-        );
-        if (card.card_type === "message_draft") {
-          lastDraft.current = card.data as Record<string, any>;
-        } else if (card.card_type !== "help") {
-          lastDraft.current = null;
+        try {
+          const card = await opsApi.query(
+            text,
+            base,
+            lastDraft.current ? { last_message_draft: lastDraft.current } : undefined,
+          );
+          if (card.card_type === "message_draft") {
+            lastDraft.current = card.data as Record<string, any>;
+          } else if (card.card_type !== "help") {
+            lastDraft.current = null;
+          }
+          if (card.card_type !== "help") {
+            pendingClarify.current = null;
+            patchMsg(aiId, {
+              pending: false,
+              text: card.summary ?? card.title,
+              card,
+            });
+            return;
+          }
+        } catch {
+          // ops router unreachable — fall through to language pipeline
         }
-        if (card.card_type !== "help") {
-          pendingClarify.current = null;
+        lastDraft.current = null;
+
+        // Fall back to the language-understanding pipeline for instructions/clarifications.
+        try {
+          // Multi-turn: if the previous turn asked for clarification, continue that conversation.
+          const resp = pendingClarify.current
+            ? await resolveXService.clarifyWithBackend(pendingClarify.current.conversationId, text, base)
+            : await resolveXService.analyzeWithBackend(text, undefined, base);
+          pendingClarify.current =
+            resp.status === "NEEDS_CLARIFICATION" ? { conversationId: resp.conversation_id } : null;
+          setActiveConv({ id: resp.conversation_id, title: text.slice(0, 60) });
+          loadHistory();
+          const top = resp.interpretations?.[0];
+          const status = String(resp.status ?? "");
+          const direct = resp.resolved_intent?.direct_answer;
+          const summary =
+            status === "NEEDS_CLARIFICATION"
+              ? `I need a bit more detail before I can resolve that.${resp.clarification_questions?.length ? ` ${resp.clarification_questions[0]}` : ""}`
+              : direct || top?.label || top?.description || "I processed your request.";
           patchMsg(aiId, {
             pending: false,
-            text: card.summary ?? card.title,
-            card,
+            text: summary,
+            analysis: { status, summary },
+            card: null,
           });
-          return;
+        } catch (err) {
+          patchMsg(aiId, {
+            pending: false,
+            text: `I couldn't reach the analysis service${err instanceof Error ? ` (${err.message})` : ""}. Please check that the backend is running, or try a business question like "Which orders might be delayed?"`,
+          });
         }
-      } catch {
-        // ops router unreachable — fall through to language pipeline
-      }
-      lastDraft.current = null;
-
-      // Fall back to the language-understanding pipeline for instructions/clarifications.
-      try {
-        // Multi-turn: if the previous turn asked for clarification, continue that conversation.
-        const resp = pendingClarify.current
-          ? await resolveXService.clarifyWithBackend(pendingClarify.current.conversationId, text, base)
-          : await resolveXService.analyzeWithBackend(text, undefined, base);
-        pendingClarify.current =
-          resp.status === "NEEDS_CLARIFICATION" ? { conversationId: resp.conversation_id } : null;
-        setActiveConv({ id: resp.conversation_id, title: text.slice(0, 60) });
-        loadHistory();
-        const top = resp.interpretations?.[0];
-        const status = String(resp.status ?? "");
-        const direct = resp.resolved_intent?.direct_answer;
-        const summary =
-          status === "NEEDS_CLARIFICATION"
-            ? `I need a bit more detail before I can resolve that.${resp.clarification_questions?.length ? ` ${resp.clarification_questions[0]}` : ""}`
-            : direct || top?.label || top?.description || "I processed your request.";
-        patchMsg(aiId, {
-          pending: false,
-          text: summary,
-          analysis: { status, summary },
-          card: null,
-        });
-      } catch (err) {
-        patchMsg(aiId, {
-          pending: false,
-          text: `I couldn't reach the analysis service${err instanceof Error ? ` (${err.message})` : ""}. Please check that the backend is running, or try a business question like "Which orders might be delayed?"`,
-        });
       } finally {
         sendingRef.current = false;
       }
