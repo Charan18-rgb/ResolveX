@@ -130,4 +130,31 @@ def get_briefing(
 
     briefing["data_source"] = "deterministic_sqlite"
     briefing["ai_enriched"] = False
+
+    # Attempt AI enrichment via Gemini (graceful fallback)
+    try:
+        from app.services.gemini_service import call_gemini_text
+        from app.services.prompts import build_briefing_prompt
+        import json
+
+        verified_sections = []
+        for s in briefing["sections"]:
+            verified_sections.append({
+                "section": s["section"],
+                "data": json.dumps(s["data"], default=str)[:2000],
+            })
+
+        prompt = build_briefing_prompt(effective_role, verified_sections)
+        ai_text, error = call_gemini_text(prompt)
+
+        if ai_text and not error:
+            briefing["ai_summary"] = ai_text
+            briefing["ai_enriched"] = True
+        else:
+            briefing["ai_summary"] = None
+            briefing["ai_note"] = error or "AI enrichment unavailable."
+    except Exception:
+        briefing["ai_summary"] = None
+        briefing["ai_note"] = "AI enrichment unavailable."
+
     return briefing
