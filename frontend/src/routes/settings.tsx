@@ -86,7 +86,7 @@ function SettingsPage() {
       <SectionHeader
         eyebrow="Configuration"
         title="Settings, Demo Role & FastAPI Readiness"
-        description="Configure client-side detection defaults, active PS2 demo persona, motion preferences, and target VITE_API_BASE_URL for future backend integration."
+        description="Configure detection defaults, active workspace role, motion preferences, and backend API connection."
         actions={
           <Button
             variant="secondary"
@@ -374,7 +374,7 @@ function SettingsPage() {
             <div className="flex items-center gap-2">
               <UserCog className="h-4 w-4 text-cyan-400" />
               <h3 className="text-base font-semibold text-white">
-                PS2 Inventory Role-Based Demo View
+                Role-Based Workspace View
               </h3>
             </div>
             <Badge tone="violet">No Login Required</Badge>
@@ -416,8 +416,8 @@ function SettingsPage() {
           </div>
           <p className="text-xs leading-relaxed text-slate-300">
             {ENV_CONFIG.appName} v{ENV_CONFIG.appVersion} unifies{" "}
-            <strong className="text-white">PS6 Natural Language Ambiguity Resolution</strong> and{" "}
-            <strong className="text-white">PS2 Smart Inventory Intelligence</strong> in one coherent
+            <strong className="text-white">Natural Language Ambiguity Resolution</strong> and{" "}
+            <strong className="text-white">Smart Inventory Intelligence</strong> in one coherent
             workspace.
           </p>
           <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3 text-[11px] text-slate-400 space-y-1">

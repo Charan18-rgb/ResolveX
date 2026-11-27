@@ -23,7 +23,7 @@ export function InventoryInsightPanel({
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-cyan-400" />
           <h3 className="text-sm sm:text-base font-semibold text-white">
-            PS2 Smart Inventory Insight (Database-Grounded)
+            Inventory Insight (Live Data)
           </h3>
           <Badge tone="cyan">{insight.intent_action}</Badge>
         </div>

@@ -2572,7 +2572,7 @@ export const DEMO_EVALUATION_DATA: EvaluationDataset = {
       {
         label: "Ambiguous Order Notes Resolved",
         value: "96.0%",
-        delta: "PS6 + PS2 unified",
+        delta: "Unified platform",
         note: "DEMO DATA — Order dispatch notes disambiguated before fulfillment",
       },
     ],

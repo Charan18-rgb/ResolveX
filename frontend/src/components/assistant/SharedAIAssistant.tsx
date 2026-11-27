@@ -58,7 +58,7 @@ export function SharedAIAssistant() {
               </Badge>
             </div>
             <p className="text-[11px] text-slate-400">
-              PS6 Gemini + PS2 SQLite • Role: {activeRole}
+              Gemini AI + Live SQLite • Role: {activeRole}
             </p>
           </div>
         </div>
@@ -87,7 +87,7 @@ export function SharedAIAssistant() {
       {/* Quick Prompts */}
       <div className="border-b border-white/10 px-4 py-3 space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Ask Across PS6 &amp; PS2
+          Try Asking
         </p>
         <div className="flex flex-wrap gap-1.5">
           {SUGGESTED_QUERIES.map((q) => (
@@ -152,11 +152,11 @@ export function SharedAIAssistant() {
               </div>
             )}
 
-            {/* Database-Grounded PS2 Inventory Insight */}
+            {/* Database-Grounded Inventory Insight */}
             {msg.inventoryInsight && (
               <div className="rounded-xl border border-cyan-500/25 bg-cyan-950/25 p-2.5 text-[11px] space-y-1.5">
                 <div className="flex items-center justify-between font-semibold text-cyan-300">
-                  <span>PS2 Inventory Snapshot</span>
+                  <span>Inventory Snapshot</span>
                   <span>
                     {msg.inventoryInsight.shortages.length} shortage(s) •{" "}
                     {
@@ -197,7 +197,7 @@ export function SharedAIAssistant() {
         {isAssistantLoading && (
           <div className="mr-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-[#0b1124] px-3.5 py-3 text-xs text-cyan-300">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Querying ResolveX PS6/PS2 backend...</span>
+            <span>Querying ResolveX backend...</span>
           </div>
         )}
       </div>

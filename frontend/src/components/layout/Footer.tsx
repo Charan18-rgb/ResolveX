@@ -18,11 +18,11 @@ export function Footer() {
               </span>
             </Link>
             <p className="max-w-md text-xs sm:text-sm leading-relaxed text-slate-400">
-              Unified AI platform combining Natural Language Ambiguity Resolution (PS6) and Smart
-              Inventory & CRD Risk Intelligence (PS2).
+              Unified AI platform combining Natural Language Ambiguity Resolution and Smart
+              Inventory &amp; CRD Risk Intelligence.
             </p>
             <p className="text-xs text-slate-500">
-              Frontend Demo Build • FastAPI integration ready via{" "}
+              Live Full-Stack Build • FastAPI + SQLite + Gemini via{" "}
               <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-300">
                 VITE_API_BASE_URL
               </code>
@@ -31,7 +31,7 @@ export function Footer() {
 
           <div className="space-y-2.5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-              PS6 & PS2 Suite
+              Unified Suite
             </h3>
             <ul className="space-y-2 text-xs text-slate-400">
               <li>
@@ -56,7 +56,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/inventory" className="hover:text-cyan-300 transition-colors">
-                  Inventory & CRD Hub (PS2)
+                  Inventory &amp; CRD Hub
                 </Link>
               </li>
             </ul>
@@ -74,7 +74,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/evaluation" className="hover:text-cyan-300 transition-colors">
-                  Unified Analytics (DEMO DATA)
+                  Unified Analytics
                 </Link>
               </li>
               <li>

@@ -94,7 +94,7 @@ function WorkspacePage() {
       icon: CheckCircle2,
     },
     {
-      title: "Inventory & CRD Hub (PS2)",
+      title: "Inventory & CRD Hub",
       description: "Materials, shortages, CRD risks & PO approvals",
       to: "/inventory" as const,
       icon: Package,
@@ -164,7 +164,7 @@ function WorkspacePage() {
 
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-200">
-              Jump Into Active Pipeline or PS2 Inventory
+              Jump Into Active Pipeline or Inventory Hub
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {pipelineDestinations.map((dest) => {

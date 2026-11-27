@@ -78,7 +78,7 @@ function EvaluationPage() {
       setPs6Source(res.source);
     } catch (err) {
       setErrorMsg(
-        err instanceof Error ? err.message : "PS6 evaluation run failed.",
+        err instanceof Error ? err.message : "Language evaluation run failed.",
       );
     } finally {
       setIsRunningPs6(false);
@@ -109,7 +109,7 @@ function EvaluationPage() {
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
         eyebrow="Live Backend Evaluation"
-        title="PS2 & PS6 Benchmark Telemetry"
+        title="Unified Benchmark Telemetry"
         description="Real measured results executed by backend evaluators against the SQLite inventory database and 48-case ambiguity dataset."
         actions={
           <div className="flex flex-wrap gap-2">
@@ -126,7 +126,7 @@ function EvaluationPage() {
               iconLeft={<Play className="h-4 w-4" />}
               onClick={() => void handleRunLivePs6()}
             >
-              Run 48-Case PS6 Benchmark
+              Run 48-Case Language Benchmark
             </Button>
           </div>
         }
@@ -156,7 +156,7 @@ function EvaluationPage() {
           }`}
         >
           <Boxes className="h-4 w-4" />
-          PS2 Deterministic Inventory Eval
+          Inventory Intelligence Evaluation
         </button>
         <button
           type="button"
@@ -168,7 +168,7 @@ function EvaluationPage() {
           }`}
         >
           <Languages className="h-4 w-4" />
-          PS6 Ambiguity Benchmark
+          Language Understanding Benchmark
         </button>
       </div>
 
@@ -282,11 +282,11 @@ function EvaluationPage() {
           {!ps6Eval ? (
             <Card className="space-y-4 py-8 text-center">
               <p className="text-sm text-slate-300">
-                No PS6 evaluation record persisted yet in SQLite ({ps6Source}).
+                No language evaluation record persisted yet in SQLite ({ps6Source}).
               </p>
               <div className="flex justify-center">
                 <Button isLoading={isRunningPs6} onClick={() => void handleRunLivePs6()}>
-                  Run 48-Case PS6 Evaluation Now
+                  Run 48-Case Language Evaluation Now
                 </Button>
               </div>
             </Card>
@@ -326,7 +326,7 @@ function EvaluationPage() {
               <Card className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold text-white">
-                    PS6 Measured Benchmark Metrics (%)
+                    Language Benchmark Metrics (%)
                   </h3>
                   <Badge tone="emerald">
                     <CheckCircle2 className="h-3 w-3" />

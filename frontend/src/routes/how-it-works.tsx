@@ -95,7 +95,7 @@ const PIPELINE_DETAILS: PipelineDetail[] = [
   {
     id: "inventory",
     step: "Step 05",
-    title: "Smart Inventory & Procurement Execution (PS2)",
+    title: "Smart Inventory & Procurement Execution",
     icon: Boxes,
     route: "/inventory",
     inputExample: "Verified supply-chain directive or live BOM/CRD inventory telemetry",
@@ -113,7 +113,7 @@ const ENDPOINT_FLOW_STEPS = [
   "What-If Interpretation Mapping",
   "Priority Clarification Optimizer",
   "Verification Gate",
-  "Structured Intent / PS2 Action",
+  "Structured Intent / Inventory Action",
 ];
 
 function HowItWorksPage() {
@@ -128,7 +128,7 @@ function HowItWorksPage() {
       <SectionHeader
         eyebrow="Architecture & Methodology"
         title="How ResolveX Bridges Language & Supply Chain Decisions"
-        description="Explore the connected end-to-end architecture combining PS6 Ambiguity Resolution with PS2 Smart Inventory Intelligence."
+        description="Explore the connected end-to-end architecture combining Natural Language Ambiguity Resolution with Smart Inventory Intelligence."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -157,7 +157,7 @@ function HowItWorksPage() {
               Connected Pipeline Flow
             </h2>
           </div>
-          <Badge tone="cyan">PS6 NLU + PS2 Supply Chain</Badge>
+          <Badge tone="cyan">NLU + Supply Chain</Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {ENDPOINT_FLOW_STEPS.map((label, idx) => (
@@ -318,7 +318,7 @@ function HowItWorksPage() {
                   {resolveXService.getEndpointUrl(settings.apiBaseUrl, key)}
                 </p>
               </div>
-              <Badge tone="slate">Mock Active</Badge>
+              <Badge tone="emerald">Live API</Badge>
             </div>
           ))}
         </div>

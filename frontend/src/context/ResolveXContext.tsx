@@ -124,7 +124,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       id: "asst-welcome",
       sender: "assistant",
       domainTag: "Unified",
-      text: "ResolveX Unified Assistant ready. Ask natural-language questions across PS6 disambiguation and PS2 inventory intelligence (shortages, MAT-CHIP availability, CRD risks, or pending POs).",
+      text: "ResolveX Unified Assistant ready. Ask natural-language questions across language disambiguation and smart inventory intelligence (shortages, MAT-CHIP availability, CRD risks, or pending POs).",
       suggestedRoute: "/inventory",
       suggestedLabel: "Open Inventory Hub",
       timestamp: "Now",
@@ -1085,9 +1085,9 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
 
         const isInventory = Boolean(resp.inventory_insight);
         const domainTag: AssistantMessage["domainTag"] = isInventory
-          ? "PS2 Inventory"
+          ? "Inventory"
           : resp.status === "NEEDS_CLARIFICATION"
-            ? "PS6 Language"
+            ? "Language & Intent"
             : "Unified";
 
         let replyText = "";

@@ -101,7 +101,7 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
       ) {
         items.push({
           label: `${m.sku} — ${m.name}`,
-          sub: `PS2 Material • ${m.available} avail (${m.health})`,
+          sub: `Material • ${m.available} avail (${m.health})`,
           route: "/inventory",
         });
       }
@@ -111,7 +111,7 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
       if (o.orderNumber.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q)) {
         items.push({
           label: `${o.orderNumber} — ${o.customer}`,
-          sub: `PS2 Order • CRD ${o.crdDate} (${o.crdRisk})`,
+          sub: `Order • CRD ${o.crdDate} (${o.crdRisk})`,
           route: "/inventory",
         });
       }
@@ -121,7 +121,7 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
       if (s.prompt.toLowerCase().includes(q)) {
         items.push({
           label: s.prompt,
-          sub: `PS6 Session • ${s.ambiguityScore}% ambiguity`,
+          sub: `Session • ${s.ambiguityScore}% ambiguity`,
           route: "/analysis",
         });
       }
@@ -314,11 +314,11 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
           {(!collapsed || isMobile) && <span>New Analysis</span>}
         </Link>
 
-        {/* PS6 Language Intelligence */}
+        {/* Language & Intent */}
         <div className="space-y-1">
           {(!collapsed || isMobile) && (
             <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              PS6 • Language Intelligence
+              Language &amp; Intent
             </p>
           )}
           {PS6_NAV.map((item) => {
@@ -343,11 +343,11 @@ export function UnifiedAppShell({ children }: { children: ReactNode }) {
           })}
         </div>
 
-        {/* PS2 Smart Inventory Intelligence */}
+        {/* Inventory & Operations */}
         <div className="space-y-1">
           {(!collapsed || isMobile) && (
             <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              PS2 • Inventory Intelligence
+              Inventory &amp; Operations
             </p>
           )}
           {PS2_NAV.map((item) => {

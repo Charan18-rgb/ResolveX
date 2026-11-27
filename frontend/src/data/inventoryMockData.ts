@@ -318,7 +318,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
   {
     id: "notif-3",
-    title: "PS6 Verification Gate Active",
+    title: "Verification Gate Active",
     detail: "Essential intent fields require clarification before finalizing the active prompt.",
     category: "PS6",
     severity: "info",

@@ -3,8 +3,11 @@ Conversation service — orchestrates PS6 analysis, clarification, and resolutio
 Coordinates between DB operations, PS6 core engines, and Gemini.
 """
 
+import logging
 import uuid
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from app.core.ambiguity_detector import detect_ambiguity, detect_ambiguity_with_clarification
 from app.core.clarification_engine import (
@@ -99,6 +102,9 @@ def start_conversation(
     )
 
     inventory_insight = _maybe_route_inventory(db_path, resolved_intent_payload)
+    resolved_intent_payload = _attach_verified_answer(
+        db_path, conversation_id, resolved_intent_payload, inventory_insight
+    )
 
     return AnalyzeResponse(
         conversation_id=conversation_id,
@@ -218,6 +224,9 @@ def continue_conversation(
     )
 
     inventory_insight = _maybe_route_inventory(db_path, resolved_intent_payload)
+    resolved_intent_payload = _attach_verified_answer(
+        db_path, conversation_id, resolved_intent_payload, inventory_insight
+    )
 
     return AnalyzeResponse(
         conversation_id=conversation_id,
@@ -304,6 +313,37 @@ def _maybe_route_inventory(
         return route_to_inventory(db_path, intent_obj)
     except Exception:
         return None
+
+
+def _attach_verified_answer(
+    db_path: str,
+    conversation_id: str,
+    resolved_payload: Optional[ResolvedIntentPayload],
+    inventory_insight: Optional[dict[str, Any]],
+) -> Optional[ResolvedIntentPayload]:
+    """
+    Attach deterministic database-grounded explanation to resolved_intent.direct_answer
+    when inventory_insight provides one, and persist it so GET /api/intent/{id} matches.
+    """
+    if resolved_payload is None or not inventory_insight:
+        return resolved_payload
+    explanation = inventory_insight.get("explanation")
+    if not isinstance(explanation, str) or not explanation.strip():
+        return resolved_payload
+
+    updated = resolved_payload.model_copy(update={"direct_answer": explanation.strip()})
+    try:
+        db_ops.save_resolved_intent(
+            db_path,
+            conversation_id,
+            action=updated.action,
+            parameters=updated.parameters,
+            resolved_instruction=updated.resolved_instruction,
+            direct_answer=updated.direct_answer,
+        )
+    except Exception as exc:
+        logger.warning("Failed to persist verified inventory answer for %s: %s", conversation_id, exc)
+    return updated
 
 
 # ---------------------------------------------------------------------------

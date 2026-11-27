@@ -83,7 +83,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Understand the Unclear. Resolve the Intent. Unified AI platform for Natural Language Ambiguity Resolution (PS6) and Smart Inventory Intelligence (PS2).",
+          "Understand the Unclear. Resolve the Intent. Unified AI platform for Natural Language Ambiguity Resolution and Smart Inventory Intelligence.",
       },
       {
         property: "og:title",

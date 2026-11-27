@@ -225,7 +225,7 @@ function InventoryHubPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
-        eyebrow="PS2 — Smart Inventory Intelligence"
+        eyebrow="Inventory & Operations Hub"
         title="Materials, CRD Risk & Procurement Hub"
         description="Authoritative SQLite inventory availability (on_hand + incoming - allocated), Earliest-CRD-First allocation, CRD risk assessment, proactive alerts, and HITL PO approvals."
         actions={
@@ -621,7 +621,7 @@ function InventoryHubPage() {
                       }
                       iconRight={<ArrowRight className="h-3 w-3" />}
                     >
-                      Analyze in PS6
+                      Analyze in ResolveX
                     </Button>
                   </div>
                 </Card>

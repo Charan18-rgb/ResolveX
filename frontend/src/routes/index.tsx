@@ -50,7 +50,7 @@ const THREE_STAGES = [
     step: "03 — Resolve",
     title: "Verify & Act With Confidence",
     description:
-      "Produce deterministic intent specs and link directly into PS2 Smart Inventory & CRD risk workflows.",
+      "Produce deterministic intent specs and link directly into Smart Inventory & CRD risk workflows.",
     icon: CheckCircle2,
     to: "/resolution",
   },
@@ -59,7 +59,7 @@ const THREE_STAGES = [
 const FEATURE_CARDS = [
   {
     title: "Detection & Context Graph",
-    badge: "PS6 Stage 01",
+    badge: "Stage 01",
     icon: Radar,
     to: "/visualization",
     description:
@@ -67,7 +67,7 @@ const FEATURE_CARDS = [
   },
   {
     title: "What-If Simulator",
-    badge: "PS6 Stage 02",
+    badge: "Stage 02",
     icon: GitBranch,
     to: "/interpretations",
     description:
@@ -75,7 +75,7 @@ const FEATURE_CARDS = [
   },
   {
     title: "Clarification & Verification",
-    badge: "PS6 Stage 03",
+    badge: "Stage 03",
     icon: ShieldCheck,
     to: "/clarification",
     description:
@@ -83,7 +83,7 @@ const FEATURE_CARDS = [
   },
   {
     title: "Inventory & CRD Hub",
-    badge: "PS2 Unified",
+    badge: "Operations",
     icon: Package,
     to: "/inventory",
     description:
@@ -139,7 +139,7 @@ function LandingPage() {
             >
               <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-xs font-medium text-violet-200">
                 <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
-                <span>PS6 Language Intelligence + PS2 Inventory Intelligence</span>
+                <span>Language Intelligence + Smart Inventory Operations</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.08]">
@@ -259,7 +259,7 @@ function LandingPage() {
                     {!activeAnalysis.isDemoData
                       ? `LIVE BACKEND (${activeAnalysis.backendData?.status ?? "ANALYZED"})`
                       : hasAnalyzedHere
-                        ? "LIVE MOCK RESULT"
+                        ? "SIMULATED FALLBACK"
                         : "SAMPLE ANALYSIS PREVIEW"}
                   </Badge>
                   <Badge tone="violet">
@@ -361,7 +361,7 @@ function LandingPage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
           <SectionHeader
             eyebrow="Unified Platform"
-            title="PS6 Language Intelligence Meets PS2 Inventory Operations"
+            title="Language Intelligence Meets Smart Inventory Operations"
             description="Every module shares one assistant, unified analytics, and consistent design tokens."
             actions={
               <Button

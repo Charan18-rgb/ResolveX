@@ -219,10 +219,14 @@ function ResolutionPage() {
         <Card className="space-y-1.5">
           <span className="text-xs text-slate-400">Clarity Improvement</span>
           <p className="font-mono text-3xl font-bold text-cyan-300">
-            +{finalResolution.clarityGain} pts
+            {isVerifiedResolved && finalResolution.clarityGain === 0
+              ? "Clear"
+              : `+${finalResolution.clarityGain} pts`}
           </p>
           <p className="text-xs text-slate-400">
-            Ambiguity {activeAnalysis.ambiguityScore}% → {finalResolution.remainingAmbiguityScore}%
+            {isVerifiedResolved && finalResolution.clarityGain === 0
+              ? "No ambiguity detected — resolved immediately"
+              : `Ambiguity ${activeAnalysis.ambiguityScore}% → ${finalResolution.remainingAmbiguityScore}%`}
           </p>
         </Card>
 
@@ -379,7 +383,9 @@ function ResolutionPage() {
           <div className="space-y-3">
             {finalResolution.appliedDecisions.length === 0 ? (
               <p className="rounded-xl border border-dashed border-white/12 p-4 text-xs text-slate-400">
-                No clarification turns submitted yet.
+                {isVerifiedResolved
+                  ? "Resolved directly on initial analysis — no clarification turns required."
+                  : "No clarification turns submitted yet."}
               </p>
             ) : (
               finalResolution.appliedDecisions.map((item, idx) => (

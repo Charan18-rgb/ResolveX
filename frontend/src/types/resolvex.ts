@@ -494,7 +494,7 @@ export interface AssistantMessage {
   id: string;
   sender: "user" | "assistant";
   text: string;
-  domainTag: "PS6 Language" | "PS2 Inventory" | "Unified";
+  domainTag: "Language & Intent" | "Inventory" | "Unified";
   suggestedRoute?: string | undefined;
   suggestedLabel?: string | undefined;
   timestamp: string;
