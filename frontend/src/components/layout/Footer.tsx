@@ -1,7 +1,7 @@
-import { FolderGit2, Sparkles } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link } from "@tanstack/react-router";
+import { FolderGit2, Sparkles } from "lucide-react";
 
-const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_YEAR = 2026;
 
 export function Footer() {
   return (
@@ -18,12 +18,11 @@ export function Footer() {
               </span>
             </Link>
             <p className="max-w-md text-xs sm:text-sm leading-relaxed text-slate-400">
-              Natural language ambiguity detection and resolution interface.
-              Transforms underspecified instructions into structured,
-              high-confidence intent specifications.
+              Unified AI platform combining Natural Language Ambiguity Resolution (PS6) and Smart
+              Inventory & CRD Risk Intelligence (PS2).
             </p>
             <p className="text-xs text-slate-500">
-              Frontend Demo Build • FastAPI integration ready via{' '}
+              Frontend Demo Build • FastAPI integration ready via{" "}
               <code className="rounded bg-white/5 px-1.5 py-0.5 text-cyan-300">
                 VITE_API_BASE_URL
               </code>
@@ -32,37 +31,32 @@ export function Footer() {
 
           <div className="space-y-2.5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-              Workspace & Pipeline
+              PS6 & PS2 Suite
             </h3>
             <ul className="space-y-2 text-xs text-slate-400">
               <li>
                 <Link to="/workspace" className="hover:text-cyan-300 transition-colors">
-                  Workspace Studio
-                </Link>
-              </li>
-              <li>
-                <Link to="/analysis" className="hover:text-cyan-300 transition-colors">
-                  Ambiguity Analysis
+                  Language Workspace
                 </Link>
               </li>
               <li>
                 <Link to="/visualization" className="hover:text-cyan-300 transition-colors">
-                  Ambiguity Visualization
+                  Context Intelligence Graph
                 </Link>
               </li>
               <li>
                 <Link to="/interpretations" className="hover:text-cyan-300 transition-colors">
-                  Interpretations
+                  What-If Simulator
                 </Link>
               </li>
               <li>
                 <Link to="/clarification" className="hover:text-cyan-300 transition-colors">
-                  Clarification Flow
+                  Clarification Optimizer
                 </Link>
               </li>
               <li>
-                <Link to="/resolution" className="hover:text-cyan-300 transition-colors">
-                  Final Resolution
+                <Link to="/inventory" className="hover:text-cyan-300 transition-colors">
+                  Inventory & CRD Hub (PS2)
                 </Link>
               </li>
             </ul>
@@ -80,7 +74,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/evaluation" className="hover:text-cyan-300 transition-colors">
-                  Evaluation (Demo Data)
+                  Unified Analytics (DEMO DATA)
                 </Link>
               </li>
               <li>
@@ -104,10 +98,13 @@ export function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/8 pt-6 text-xs text-slate-500">
-          <p>© {CURRENT_YEAR} ResolveX Frontend. Mock client simulation.</p>
-          <p>Built with React, TypeScript, Tailwind CSS, Framer Motion & Recharts.</p>
+          <p>© {CURRENT_YEAR} ResolveX Unified Frontend. Mock client simulation.</p>
+          <p>
+            Built with TanStack Start, TypeScript, Tailwind CSS, shadcn/ui, Framer Motion &
+            Recharts.
+          </p>
         </div>
       </div>
     </footer>
-  )
+  );
 }

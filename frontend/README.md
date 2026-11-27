@@ -1,30 +1,21 @@
-# ResolveX Frontend
+# ResolveX Unified Frontend (`frontend/`)
 
-Interactive frontend for **ResolveX** — an AI-powered natural language ambiguity detection, interpretation mapping, clarification, and deterministic intent resolution platform.
+Unified React + TanStack Start + TypeScript + Tailwind CSS v4 frontend merging **PS6: Natural Language Ambiguity Resolution** and **PS2: Smart Inventory Intelligence** into one coherent application.
 
-> **Note:** This frontend currently runs in **client-side mock mode** using deterministic local state and clearly labelled **DEMO DATA** (no live AI, database, or backend requests are made). A centralized, FastAPI-ready API client is configured via `VITE_API_BASE_URL`.
+> **Important Scope Note**: This package runs **100% client-side with structured demo/mock engines** and clearly labeled `DEMO DATA`. No backend server, database, or live external AI API is executed here, while all service contracts remain ready for a future FastAPI backend via `VITE_API_BASE_URL`.
 
-## Tech Stack
+## Unified Capabilities
 
-- **React 19 + TypeScript + Vite**
-- **Tailwind CSS v4** (`@tailwindcss/vite`)
-- **React Router** (`react-router-dom`)
-- **Framer Motion** (`framer-motion`)
-- **Lucide React** (`lucide-react`)
-- **Recharts** (`recharts`)
-
-## Pages & Capabilities
-
-- **Landing (`/`)**: Hero ("Not Everything You Say Is What You Mean."), interactive prompt workspace with validation and 3 clickable examples, 4 feature cards, and 4-step How It Works overview.
-- **Workspace (`/workspace`)**: Domain/strictness configuration, prompt editor, and local session history.
-- **Analysis (`/analysis`)**: KPI metrics, inline highlighted ambiguity spans, category breakdown, classifier confidence scores, and interactive Context Intelligence Graph.
-- **Ambiguity Visualization (`/visualization`)**: Interactive Context Intelligence Graph (zoom, pan, node selection, entity/relation inspection, live updates from clarification & interpretation state), clickable token heatmap, semantic branch tree, and Recharts radar & severity/confidence charts.
-- **Interpretations (`/interpretations`)**: Ranked candidate readings with probability bars, risk levels, implicit assumptions, and comparison table.
-- **Clarification (`/clarification`)**: Smart Clarification Optimizer + live Resolution Verification Gate (ranks unresolved ambiguities by importance, explains why each question is selected and necessary, validates missing/ambiguous/contradictory fields, recalculates after every answer, tracks conversation history, and stops early when essential fields pass verification).
-- **Final Resolution (`/resolution`)**: Final Verification Summary (completeness score, required vs. optional field checks, contradiction diagnostics), side-by-side before/after comparison, clarity gain, clarification optimization trace, applied decisions, and copy/export JSON intent specification.
-- **Evaluation (`/evaluation`)**: Clearly labelled **DEMO DATA** benchmarks with Recharts precision/recall/F1, turn progression, and stage latency visualizations.
-- **How It Works (`/how-it-works`)**: Interactive 4-stage pipeline walkthrough and FastAPI endpoint contract preview.
-- **Settings (`/settings`)**: Configurable `VITE_API_BASE_URL`, integration mode toggle, detection thresholds, and local state management.
+- **Unified Application Shell**: Collapsible navigation sidebar, top bar with global search, notification center, active PS2 demo persona switcher (`Inventory Planner`, `Procurement Manager`, `Operations Manager`), and a **Shared AI Assistant** answering both PS6 disambiguation and PS2 inventory/CRD risk queries.
+- **3D Interactive Hero (`/`)**: Mouse-reactive neural disambiguation sphere (`IntelligenceSphere3D`), quick prompt examples, PS6/PS2 domain cards, and pipeline walkthrough.
+- **Multilingual NLU Workspace (`/workspace`)**: Supports **Auto Detect**, **English**, **Kannada**, **Hindi**, **Hinglish**, and **Kanglish** while preserving the user's original script alongside normalized interpretations and an animated **4-Stage Analysis Sequence** (`Ambiguity Detection` → `Inventory & Risk Impact` → `Decision Simulation` → `Verification Check`).
+- **Smart Inventory Intelligence (`/inventory`)**: Material inventory levels, net shortage projections, **Customer Requested Date (CRD)** at-risk orders, AI replenishment recommendations, one-click Draft POs, and role-aware approval workflows (`DEMO DATA`).
+- **Context Intelligence Graph (`/visualization`)**: Interactive zoom/pan semantic graph connecting actions, actors, SKUs, dates, and ambiguous references with live inspector details synced to clarification and What-If scenarios.
+- **What-If Interpretation Simulator (`/interpretations`)**: Side-by-side comparison of plausible execution interpretations, consequence previews, dimension diffs, and handoff to clarification.
+- **Smart Clarification Optimizer (`/clarification`)**: Information-gain priority queue explaining _why_ each question was selected, custom & quick-select answers, early-stop detection, and live re-verification.
+- **Verification Layer & Structured Output (`/resolution`)**: Field-level verification checks (required vs. optional), completeness score gating, before/after comparison, and `.json` contract export.
+- **Unified Evaluation (`/evaluation`)**: Recharts visualizations for both PS6 NLU precision/recall/clarity progression and PS2 stock health / warehouse utilization (`DEMO DATA`).
+- **Architecture & Settings (`/how-it-works`, `/settings`)**: Interactive methodology walkthrough, FastAPI endpoint contract preview (`/health`, `/api/v1/analyze`, `/api/v1/resolve`, `/api/v1/evaluation`), and configurable `VITE_API_BASE_URL`.
 
 ## Getting Started
 
@@ -34,21 +25,20 @@ npm install
 npm run dev
 ```
 
-### Environment Variables
+### Verification Commands
+
+```bash
+npm run build   # Production TanStack Start + Vite bundle
+npx tsc --noEmit # Strict TypeScript type-check
+npm run lint    # ESLint + Prettier check
+npm test        # Vitest route & smoke tests
+```
+
+## Environment Configuration
 
 Copy `.env.example` to `.env` if you want to customize the future FastAPI base URL:
 
-```bash
-cp .env.example .env
-```
-
 ```env
 VITE_API_BASE_URL=http://localhost:8000
+VITE_APP_NAME=ResolveX
 ```
-
-## Scripts
-
-- `npm run dev` — Start Vite development server
-- `npm run build` — Run TypeScript check (`tsc -b`) and build production bundle
-- `npm run lint` — Run Oxlint checks
-- `npm run preview` — Preview production build locally
