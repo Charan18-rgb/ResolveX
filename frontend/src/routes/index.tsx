@@ -252,13 +252,23 @@ function HomePage() {
         const conv = detail.conversation;
         const loaded: ChatMsg[] = (detail.messages ?? [])
           .filter((m) => m.role === "user" || m.role === "assistant")
-          .map((m, i) => ({
-            id: `h${h.id}-${i}`,
-            role: m.role === "user" ? "user" : "assistant",
-            text: m.content,
-            card: null,
-            analysis: null,
-          }));
+          .map((m, i) => {
+            let card: OpsCard | null = null;
+            if (m.role === "assistant" && m.card_json) {
+              try {
+                card = JSON.parse(m.card_json) as OpsCard;
+              } catch {
+                card = null;
+              }
+            }
+            return {
+              id: `h${h.id}-${i}`,
+              role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+              text: m.content,
+              card,
+              analysis: null,
+            };
+          });
         const persistedDraft = detail.draft?.draft ?? null;
         const msgs: ChatMsg[] = loaded.length
           ? [...loaded]

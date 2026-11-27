@@ -53,3 +53,13 @@ Session start state: HEAD `2bbff1d` (pushed, remote verified), clean tree, backe
 ## Phase 3b — fix: ops turns must not flip NLU conversation status
 
 - Bug: ops persistence wrapper called update_conversation_state(status="RESOLVED") on whatever conversation_id was passed — an NLU conversation in NEEDS_CLARIFICATION would be corrupted. Verified live before fix path existed; fixed by preserving conv.status. Re-verified: ops query against NEEDS_CLARIFICATION conv leaves status intact, messages append correctly. test_ops_query 12/12.
+
+## Phase 4 — final hardening: card restoration, record review, freeze prep
+
+- Ops card restoration: `messages.card_json` column (schema + migration v4, guarded ALTER). `/api/ops/query` persists the full card payload for non-draft cards; conversation detail returns it; frontend parses and renders OpsCardView on reopen. message_draft cards excluded (message_drafts owns latest draft — appended on open). Non-draft cards now clear the persisted draft server-side, mirroring client semantics.
+- Verified live+browser: warehouse-capacity card restores as interactive table after refresh/reopen; "Delayed orders check" conv shows order-risk card + exactly one draft card (no duplicates); reopen is read-only (no re-execution, status preserved).
+- Remaining 76 conversations reviewed: all are dev/test artifacts — benchmark-probe instructions outside run windows, adversarial inputs ("Book a flight to Paris", "what is the weather today"), Hinglish comms tests, and repeated manual NLU checks. None confidently classifiable as genuine end-user conversations; all retained per conservative policy. No further deletion.
+- New-conversation persistence: ops queries and NLU analyze both persist immediately; clarify state restores via conv.status=NEEDS_CLARIFICATION; drafts restore via message_drafts + card re-render. Session store prevents cross-conversation leaks.
+- PS6 smoke: analyze→clarify→clarify→RESOLVED verified post-schema-change. Backend pytest 72/72, Vitest 32/32, tsc clean, build pass (run earlier this phase).
+- Presentation audit: nav labels user-facing; internal terms (PS6_NAV const, mock data) are code-level only. No customer-facing benchmark/dev terminology found.
+- Gmail: NOT CONNECTED (verified); .env.example documents GOOGLE_CLIENT_ID/SECRET, GOOGLE_REDIRECT_URI, GMAIL_SENDER, GMAIL_REFRESH_TOKEN.

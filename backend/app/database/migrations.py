@@ -229,3 +229,13 @@ def run_migrations(db_path: str) -> None:
             VALUES (3, 'Per-conversation message draft persistence', datetime('now'));
             """
         )
+        # v4: structured card payloads on assistant messages (ops result cards).
+        msg_cols = {row[1] for row in conn.execute("PRAGMA table_info(messages)")}
+        if "card_json" not in msg_cols:
+            conn.execute("ALTER TABLE messages ADD COLUMN card_json TEXT NULL;")
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (4, 'Structured card payloads on messages', datetime('now'));
+            """
+        )

@@ -1174,6 +1174,7 @@ export interface BackendConversationDetail {
     role: string;
     content: string;
     turn_number: number;
+    card_json?: string | null;
     created_at: string;
   }>;
   clarification_questions: Array<{

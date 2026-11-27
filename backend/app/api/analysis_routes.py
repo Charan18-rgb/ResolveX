@@ -146,7 +146,7 @@ def list_conversations(
             messages = [
                 dict(r)
                 for r in conn.execute(
-                    "SELECT role, content, turn_number, created_at FROM messages WHERE conversation_id = ? ORDER BY id;",
+                    "SELECT role, content, turn_number, card_json, created_at FROM messages WHERE conversation_id = ? ORDER BY id;",
                     (conversation_id,),
                 ).fetchall()
             ]

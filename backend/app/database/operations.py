@@ -125,6 +125,7 @@ def add_message(
     role: str,
     content: str,
     turn_number: int,
+    card_json: Optional[str] = None,
 ) -> int:
     """Append a message to a conversation and return its row ID."""
     now = _utc_now_iso()
@@ -132,10 +133,10 @@ def add_message(
         with get_connection(db_path) as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO messages (conversation_id, role, content, turn_number, created_at)
-                VALUES (?, ?, ?, ?, ?);
+                INSERT INTO messages (conversation_id, role, content, turn_number, card_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?);
                 """,
-                (conversation_id, role, content, turn_number, now),
+                (conversation_id, role, content, turn_number, card_json, now),
             )
             return int(cursor.lastrowid)
     except sqlite3.Error as exc:
@@ -148,7 +149,7 @@ def get_messages(db_path: str, conversation_id: str) -> list[dict[str, Any]]:
         with get_connection(db_path) as conn:
             rows = conn.execute(
                 """
-                SELECT id, conversation_id, role, content, turn_number, created_at
+                SELECT id, conversation_id, role, content, turn_number, card_json, created_at
                 FROM messages
                 WHERE conversation_id = ?
                 ORDER BY turn_number ASC, id ASC;
@@ -461,6 +462,15 @@ def get_message_draft(db_path: str, conversation_id: str) -> Optional[dict[str, 
         }
     except (sqlite3.Error, ValueError) as exc:
         raise DatabaseOperationError("Failed to fetch message draft.") from exc
+
+
+def clear_message_draft(db_path: str, conversation_id: str) -> None:
+    """Remove the persisted draft for a conversation (e.g. superseded by another card)."""
+    try:
+        with get_connection(db_path) as conn:
+            conn.execute("DELETE FROM message_drafts WHERE conversation_id = ?;", (conversation_id,))
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to clear message draft.") from exc
 
 
 def rename_conversation(db_path: str, conversation_id: str, title: str) -> bool:

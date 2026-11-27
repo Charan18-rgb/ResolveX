@@ -632,21 +632,31 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
             conv = db_ops.get_conversation(db, conv_id)
         turn = int((conv or {}).get("turn_count") or 1)
         db_ops.add_message(db, conv_id, role="user", content=body.question, turn_number=turn)
+        # Persist the structured card so the interactive result restores on reopen.
+        # message_draft cards are excluded — the message_drafts table owns the
+        # latest draft and re-renders it separately.
+        import json as _json
+
+        card_payload = (
+            None
+            if card.get("card_type") == "message_draft"
+            else _json.dumps(card)
+        )
         db_ops.add_message(
             db, conv_id, role="assistant",
             content=str(card.get("summary") or card.get("title") or ""), turn_number=turn,
+            card_json=card_payload,
         )
         # Preserve the conversation's existing status — an NLU conversation may
         # legitimately be NEEDS_CLARIFICATION and must not be flipped to RESOLVED.
         db_ops.update_conversation_state(
             db, conv_id, status=str((conv or {}).get("status") or "RESOLVED"), turn_count=turn + 1
         )
-        if (
-            card.get("card_type") == "message_draft"
-            and isinstance(card.get("data"), dict)
-            and "body" in card["data"]
-        ):
+        if card.get("card_type") == "message_draft" and isinstance(card.get("data"), dict) and "body" in card["data"]:
             db_ops.upsert_message_draft(db, conv_id, card["data"])
+        elif card.get("card_type") != "message_draft":
+            # Mirror client semantics: a non-draft card supersedes the active draft.
+            db_ops.clear_message_draft(db, conv_id)
         card["conversation_id"] = conv_id
     except Exception:
         logger.exception("ops persistence failed; returning card without history")
