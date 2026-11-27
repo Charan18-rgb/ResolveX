@@ -148,7 +148,7 @@ function SettingsPage() {
                 {(
                   [
                     { id: "live", label: "Live FastAPI + Gemini" },
-                    { id: "mock", label: "Offline Mock Fallback" },
+                    { id: "mock", label: "Local Simulation (DEMO DATA)" },
                   ] as const
                 ).map((mode) => (
                   <button
@@ -194,16 +194,16 @@ function SettingsPage() {
               className={`rounded-xl border p-3.5 space-y-1 text-xs ${
                 healthPreview.reachable
                   ? "border-emerald-500/35 bg-emerald-950/20"
-                  : "border-rose-500/35 bg-rose-950/20"
+                  : "border-white/10 bg-[#050814]/85"
               }`}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="font-mono text-cyan-300">{healthPreview.baseUrl}</p>
-                <Badge tone={healthPreview.reachable ? "emerald" : "rose"}>
-                  {healthPreview.reachable ? "REACHABLE" : "UNREACHABLE"}
+                <Badge tone={healthPreview.reachable ? "emerald" : "amber"}>
+                  {healthPreview.reachable ? "Connected" : "Offline / Simulation"}
                 </Badge>
               </div>
-              <p className="text-slate-200">{healthPreview.message}</p>
+              <p className="text-slate-300">{healthPreview.message}</p>
             </div>
           )}
         </Card>
@@ -373,9 +373,7 @@ function SettingsPage() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <UserCog className="h-4 w-4 text-cyan-400" />
-              <h3 className="text-base font-semibold text-white">
-                Role-Based Workspace View
-              </h3>
+              <h3 className="text-base font-semibold text-white">Role-Based Workspace View</h3>
             </div>
             <Badge tone="violet">No Login Required</Badge>
           </div>
@@ -421,8 +419,14 @@ function SettingsPage() {
             workspace.
           </p>
           <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3 text-[11px] text-slate-400 space-y-1">
-            <p>• Connected to FastAPI + SQLite + Google Gemini API (key kept strictly in backend/.env).</p>
-            <p>• Role switching uses demo-level <code>X-User-Role</code> headers (not production auth).</p>
+            <p>
+              • Connected to FastAPI + SQLite + Google Gemini API (key kept strictly in
+              backend/.env).
+            </p>
+            <p>
+              • Role switching uses demo-level <code>X-User-Role</code> headers (not production
+              auth).
+            </p>
           </div>
         </Card>
       </div>

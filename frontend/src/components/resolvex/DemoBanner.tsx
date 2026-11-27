@@ -8,11 +8,7 @@ interface DemoBannerProps {
   compact?: boolean | undefined;
 }
 
-export function DemoBanner({
-  label,
-  description,
-  compact = false,
-}: DemoBannerProps) {
+export function DemoBanner({ label, description, compact = false }: DemoBannerProps) {
   const { settings, backendHealth } = useResolveX();
 
   const isLive = settings.integrationMode === "live";

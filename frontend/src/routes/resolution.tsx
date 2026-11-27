@@ -17,12 +17,17 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { ConfidenceUncertaintyPanel } from "@/components/resolvex/ConfidenceUncertaintyPanel";
+import { ContextMemoryPanel } from "@/components/resolvex/ContextMemoryPanel";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { ExplainabilityLedger } from "@/components/resolvex/ExplainabilityLedger";
 import { InventoryInsightPanel } from "@/components/resolvex/InventoryInsightPanel";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { VerificationSummaryPanel } from "@/components/resolvex/VerificationSummaryPanel";
+import { RiskAssessmentPanel } from "@/components/resolvex/RiskAssessmentPanel";
+import { DecisionTimelinePanel } from "@/components/resolvex/DecisionTimelinePanel";
+import { generateDecisionTimeline } from "@/data/decisionTimelineEngine";
 import { useResolveX } from "@/context/useResolveX";
 
 export const Route = createFileRoute("/resolution")({
@@ -36,9 +41,14 @@ function ResolutionPage() {
     finalResolution,
     optimizerState,
     verificationReport,
+    confidenceAssessment,
+    liveBackendNotice,
     focusClarificationQuestion,
     language,
     uiLanguage,
+    riskAssessment,
+    userConfirmedHighRisk,
+    setUserConfirmedHighRisk,
   } = useResolveX();
   const [copiedType, setCopiedType] = useState<"prompt" | "json" | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -73,6 +83,21 @@ function ResolutionPage() {
     void navigate({ to: "/clarification" });
   };
 
+  const displayTimeline =
+    finalResolution.decisionTimeline ??
+    generateDecisionTimeline({
+      analysis: activeAnalysis,
+      clarificationAnswers: optimizerState.conversationHistory,
+      optimizerState,
+      selectedInterpretation: null,
+      confidenceAssessment,
+      riskAssessment,
+      verificationReport: displayVerification,
+      contextMemory: activeAnalysis.contextMemory,
+      finalResolution,
+      userConfirmedHighRisk,
+    });
+
   const jsonPayload = JSON.stringify(
     {
       resolutionId: activeAnalysis.id,
@@ -96,6 +121,11 @@ function ResolutionPage() {
       verification: mounted
         ? displayVerification
         : { ...displayVerification, checkedAt: "ssr-pending" },
+      confidenceAssessment,
+      confidenceHistory: confidenceAssessment.history,
+      contextMemory: activeAnalysis.contextMemory,
+      riskAssessment,
+      decisionTimeline: displayTimeline,
       optimizationSummary: displaySummary,
       structuredSpec: finalResolution.structuredSpec,
       appliedDecisions: finalResolution.appliedDecisions,
@@ -290,6 +320,33 @@ function ResolutionPage() {
         report={displayVerification}
         title="Final Verification Summary"
         onRouteToQuestion={handleRouteToClarification}
+      />
+
+      {/* Feature 9: Risk-Aware Intent Resolution & Guardrails */}
+      <RiskAssessmentPanel
+        assessment={riskAssessment}
+        userConfirmed={userConfirmedHighRisk}
+        onConfirmHighRisk={setUserConfirmedHighRisk}
+        onRequestClarification={() => handleRouteToClarification(firstFailingQuestionId)}
+        title="Final Risk-Aware Intent Assessment & Guardrails"
+      />
+
+      {/* Feature 10: Explainable AI Decision Timeline */}
+      <DecisionTimelinePanel timeline={displayTimeline} />
+
+      {/* Confidence & Uncertainty Intelligence Audit + History */}
+      <ConfidenceUncertaintyPanel
+        assessment={confidenceAssessment}
+        showHistory
+        liveBackendNotice={liveBackendNotice}
+        onRequestClarification={() => handleRouteToClarification(firstFailingQuestionId)}
+        title="Confidence vs. Verified Correctness Audit & History"
+      />
+
+      <ContextMemoryPanel
+        compact
+        title="Resolved Session Context Memory Trace"
+        onResolveConflictClick={() => handleRouteToClarification(firstFailingQuestionId)}
       />
 
       <MultilingualContextBanner

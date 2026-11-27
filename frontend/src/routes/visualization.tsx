@@ -19,6 +19,8 @@ import { ContextIntelligenceGraph } from "@/components/graph/ContextIntelligence
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { ContextMemoryPanel } from "@/components/resolvex/ContextMemoryPanel";
+import { RiskAssessmentPanel } from "@/components/resolvex/RiskAssessmentPanel";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { PromptHighlighter } from "@/components/resolvex/PromptHighlighter";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
@@ -31,7 +33,14 @@ export const Route = createFileRoute("/visualization")({
 
 function VisualizationPage() {
   const navigate = useNavigate();
-  const { activeAnalysis, contextGraph, focusClarificationQuestion } = useResolveX();
+  const {
+    activeAnalysis,
+    contextGraph,
+    focusClarificationQuestion,
+    riskAssessment,
+    userConfirmedHighRisk,
+    setUserConfirmedHighRisk,
+  } = useResolveX();
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
 
   const selectedSpan =
@@ -68,6 +77,22 @@ function VisualizationPage() {
           void navigate({ to: "/clarification" });
         }}
         onOpenInterpretations={() => void navigate({ to: "/interpretations" })}
+      />
+
+      <ContextMemoryPanel
+        compact
+        title="Session Memory Synced with Context Graph"
+        onResolveConflictClick={() => void navigate({ to: "/clarification" })}
+      />
+
+      {/* Feature 9: Risk-Aware Intent Guardrails */}
+      <RiskAssessmentPanel
+        compact
+        assessment={riskAssessment}
+        userConfirmed={userConfirmedHighRisk}
+        onConfirmHighRisk={setUserConfirmedHighRisk}
+        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        title="Context Graph Impact &amp; Consequence Risk Layer"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

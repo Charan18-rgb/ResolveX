@@ -142,7 +142,9 @@ export function SharedAIAssistant() {
                     key={interp.label}
                     type="button"
                     disabled={isAssistantLoading}
-                    onClick={() => void sendAssistantQuery(`${interp.label}: ${interp.description}`)}
+                    onClick={() =>
+                      void sendAssistantQuery(`${interp.label}: ${interp.description}`)
+                    }
                     className="block w-full cursor-pointer rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-left text-[11px] hover:border-cyan-400/50 transition-colors"
                   >
                     <strong className="text-cyan-300">{interp.label}</strong>
@@ -160,9 +162,8 @@ export function SharedAIAssistant() {
                   <span>
                     {msg.inventoryInsight.shortages.length} shortage(s) •{" "}
                     {
-                      msg.inventoryInsight.order_risks.filter(
-                        (r) => r.risk_category !== "ON_TRACK",
-                      ).length
+                      msg.inventoryInsight.order_risks.filter((r) => r.risk_category !== "ON_TRACK")
+                        .length
                     }{" "}
                     at-risk order(s)
                   </span>

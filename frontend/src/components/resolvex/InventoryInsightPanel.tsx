@@ -10,10 +10,7 @@ interface InventoryInsightPanelProps {
   compact?: boolean | undefined;
 }
 
-export function InventoryInsightPanel({
-  insight,
-  compact = false,
-}: InventoryInsightPanelProps) {
+export function InventoryInsightPanel({ insight, compact = false }: InventoryInsightPanelProps) {
   const navigate = useNavigate();
   const { inventory_overview: ov, shortages, order_risks: risks } = insight;
 
@@ -49,9 +46,7 @@ export function InventoryInsightPanel({
           <span className="block text-[10px] uppercase tracking-wider text-slate-400">
             Out of Stock
           </span>
-          <span className="font-mono text-lg font-bold text-rose-300">
-            {ov.out_of_stock_count}
-          </span>
+          <span className="font-mono text-lg font-bold text-rose-300">{ov.out_of_stock_count}</span>
         </div>
         <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3">
           <span className="block text-[10px] uppercase tracking-wider text-slate-400">
@@ -97,8 +92,9 @@ export function InventoryInsightPanel({
                     <p className="text-slate-200">{s.material_name}</p>
                     <p className="text-[11px] text-slate-400">
                       On-hand: {s.on_hand} • Incoming: {s.incoming} • Allocated: {s.allocated} •
-                      Unmet demand: <strong className="text-rose-300">{s.unmet_order_demand}</strong>{" "}
-                      • Rec. PO: <strong className="text-emerald-300">+{s.recommended_purchase_qty}</strong>
+                      Unmet demand:{" "}
+                      <strong className="text-rose-300">{s.unmet_order_demand}</strong> • Rec. PO:{" "}
+                      <strong className="text-emerald-300">+{s.recommended_purchase_qty}</strong>
                     </p>
                   </div>
                 ))

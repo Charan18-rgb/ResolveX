@@ -116,12 +116,34 @@ def list_conversations(
             ]
 
         intent = db_ops.get_resolved_intent(db_path, conversation_id)
+        confidence_history, confidence_assessment = db_ops.get_confidence_history(
+            db_path, conversation_id
+        )
+        from app.core.context_analyzer import build_session_memory_bundle
+
+        session_memory, _, _, _ = build_session_memory_bundle(db_path, conversation_id)
+        from app.core.risk_engine import evaluate_intent_risk
+
+        user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
+        raw_combined = " ".join(user_msgs)
+        risk_assessment = evaluate_intent_risk(
+            action=intent["action"] if intent else "unresolved_action",
+            target=intent["resolved_instruction"] if intent else (user_msgs[0] if user_msgs else ""),
+            raw_text=raw_combined,
+            unresolved_questions_count=len([q for q in questions if not q.get("answered")]),
+            has_conflicts=bool(session_memory.reference_conflicts),
+            user_confirmed=conv.get("status") == "RESOLVED",
+        )
 
         return {
             "conversation": conv,
             "messages": messages,
             "clarification_questions": questions,
             "resolved_intent": intent,
+            "confidence_assessment": confidence_assessment,
+            "confidence_history": confidence_history,
+            "context_memory": session_memory.model_dump(),
+            "risk_assessment": risk_assessment.model_dump(),
         }
 
     conversations, total = db_ops.list_conversations(db_path, limit=limit, offset=offset)

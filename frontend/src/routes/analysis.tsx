@@ -29,6 +29,7 @@ export const Route = createFileRoute("/analysis")({
 
 const RISK_TONE: Record<RiskLevel, BadgeTone> = {
   Low: "emerald",
+  Medium: "amber",
   Moderate: "amber",
   High: "rose",
   Critical: "rose",

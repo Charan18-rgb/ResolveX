@@ -1,7 +1,7 @@
 export type AmbiguityCategory =
   "Lexical" | "Syntactic" | "Referential" | "Scope" | "Temporal" | "Pragmatic";
 
-export type RiskLevel = "Low" | "Moderate" | "High" | "Critical";
+export type RiskLevel = "Low" | "Medium" | "Moderate" | "High" | "Critical";
 
 export type LanguageOption =
   "Auto Detect" | "English" | "Kannada" | "Hindi" | "Hinglish" | "Kanglish";
@@ -75,6 +75,75 @@ export interface SimulatedConsequence {
   detail: string;
 }
 
+export type ConfidenceProvenance =
+  "live_backend" | "ai_unavailable_abstained" | "client_simulation";
+
+export type ConfidenceBand = "high" | "moderate" | "low" | "abstained";
+
+export type VerifiedCorrectnessState =
+  "verified" | "partially_verified" | "unverified" | "contradictory";
+
+export interface EvidenceItem {
+  id: string;
+  polarity: "supporting" | "contradicting";
+  category: string;
+  label: string;
+  detail: string;
+  source: string;
+  impactWeight: number;
+}
+
+export interface UnresolvedEntityItem {
+  token: string;
+  kind: string;
+  reason: string;
+  resolved: boolean;
+  resolvedValue?: string | undefined;
+}
+
+export interface ConfidenceHistoryPoint {
+  turnNumber: number;
+  timestamp: string;
+  eventLabel: string;
+  triggerInput: string;
+  confidenceScore: number | null;
+  confidenceBand: ConfidenceBand;
+  verifiedCorrectness: VerifiedCorrectnessState;
+  abstained: boolean;
+  deltaFromPrevious: number | null;
+  changeReasons: string[];
+  changeSummary: string;
+  evidenceCountSupporting: number;
+  evidenceCountContradicting: number;
+}
+
+export interface ConfidenceAssessment {
+  provenance: ConfidenceProvenance;
+  isLiveBackend: boolean;
+  modelConfidenceAvailable: boolean;
+  confidenceBasis:
+    | "backend_evidence_calibrated"
+    | "deterministic_db_grounded"
+    | "insufficient_evidence_abstained"
+    | "client_simulation_calibrated";
+  confidenceScore: number | null;
+  confidenceBand: ConfidenceBand;
+  uncertaintyScore: number;
+  evidenceSufficiencyScore: number;
+  verifiedCorrectness: VerifiedCorrectnessState;
+  verificationExplanation: string;
+  abstained: boolean;
+  abstentionReason: string | null;
+  recommendedAction: "request_clarification" | "resolve_conflicts" | "proceed_verified";
+  recommendationReason: string;
+  supportingEvidence: EvidenceItem[];
+  contradictingEvidence: EvidenceItem[];
+  missingContext: string[];
+  unresolvedEntities: UnresolvedEntityItem[];
+  history: ConfidenceHistoryPoint[];
+  calibrationNote: string;
+}
+
 export interface Interpretation {
   id: string;
   title: string;
@@ -87,6 +156,11 @@ export interface Interpretation {
   simulatedIntent: SimulatedStructuredIntent;
   triggerWords: InterpretationTriggerWord[];
   consequences: SimulatedConsequence[];
+  confidenceScore?: number | null | undefined;
+  confidenceStatus?: "calibrated" | "abstained" | undefined;
+  supportingSignals?: string[] | undefined;
+  contradictingSignals?: string[] | undefined;
+  missingRequirements?: string[] | undefined;
 }
 
 export interface ScenarioDimensionDiff {
@@ -236,6 +310,108 @@ export interface ResolutionVerificationReport {
   checkedAt: string;
 }
 
+export type ImpactDimension =
+  | "financial_payment"
+  | "data_deletion"
+  | "permission_access"
+  | "sensitive_recipient"
+  | "system_mutation";
+
+export interface RiskFactor {
+  dimension: ImpactDimension;
+  level: RiskLevel;
+  label: string;
+  description: string;
+  targetToken?: string | undefined;
+  requiresConfirmation?: boolean | undefined;
+}
+
+export interface IntentRiskAssessment {
+  riskLevel: RiskLevel;
+  riskScore: number;
+  requiresExplicitConfirmation: boolean;
+  confirmationReason: string | null;
+  highImpactAmbiguities: string[];
+  riskFactors: RiskFactor[];
+  actionType: string;
+  targetSummary: string;
+  reversibility: "reversible" | "partially_reversible" | "irreversible";
+  mitigationGuidance: string;
+  safeToResolve: boolean;
+  confirmedByUser?: boolean | undefined;
+  confirmedAt?: string | undefined;
+}
+
+export interface BackendRiskAssessmentDTO {
+  risk_level: RiskLevel;
+  risk_score: number;
+  requires_explicit_confirmation: boolean;
+  confirmation_reason: string | null;
+  high_impact_ambiguities: string[];
+  risk_factors: Array<{
+    dimension: ImpactDimension;
+    level: RiskLevel;
+    label: string;
+    description: string;
+    target_token?: string | null | undefined;
+    requires_confirmation?: boolean | undefined;
+  }>;
+  action_type: string;
+  target_summary: string;
+  reversibility: "reversible" | "partially_reversible" | "irreversible";
+  mitigation_guidance: string;
+  safe_to_resolve: boolean;
+}
+
+// --- FEATURE 10: EXPLAINABLE AI DECISION TIMELINE ---
+
+export type DecisionTimelineEventType =
+  | "initial_input"
+  | "ambiguity_detected"
+  | "interpretation_divergence"
+  | "scenario_selected"
+  | "clarification_question_selected"
+  | "clarification_answered"
+  | "memory_coreference_resolved"
+  | "confidence_recalculated"
+  | "risk_assessment_evaluated"
+  | "risk_confirmed"
+  | "verification_checked"
+  | "final_intent_compiled";
+
+export interface DecisionTimelineEvent {
+  id: string;
+  timestamp: string;
+  turnNumber: number;
+  type: DecisionTimelineEventType;
+  title: string;
+  summary: string;
+  explanation: string;
+  sourceContext?: string | undefined;
+  sourceMessage?: string | undefined;
+  targetToken?: string | undefined;
+  category?: string | undefined;
+  evidenceSignals: string[];
+  metricsSnapshot?:
+    | {
+        ambiguityScore?: number | undefined;
+        clarityScore?: number | undefined;
+        confidenceScore?: number | null | undefined;
+        verifiedCorrectness?: string | undefined;
+        riskLevel?: RiskLevel | undefined;
+        verificationStatus?: string | undefined;
+      }
+    | undefined;
+}
+
+export interface ExplainableDecisionTimeline {
+  conversationId: string;
+  generatedAt: string;
+  totalEvents: number;
+  events: DecisionTimelineEvent[];
+  summaryNarrative: string;
+}
+
 export interface FinalResolution {
   originalPrompt: string;
   resolvedPrompt: string;
@@ -260,6 +436,8 @@ export interface FinalResolution {
       }
     | undefined;
   verification?: ResolutionVerificationReport | undefined;
+  riskAssessment?: IntentRiskAssessment | undefined;
+  decisionTimeline?: ExplainableDecisionTimeline | undefined;
   generatedAt: string;
 }
 
@@ -281,6 +459,12 @@ export interface AnalysisResult {
   clarificationQuestions: ClarificationQuestion[];
   defaultResolution: FinalResolution;
   backendData?: BackendAnalyzeResponse | undefined;
+  backendConversationId?: string | undefined;
+  backendStatus?: "ANALYZING" | "NEEDS_CLARIFICATION" | "RESOLVED" | "FAILED" | undefined;
+  confidenceAssessment?: ConfidenceAssessment | undefined;
+  backendInventoryInsight?: Record<string, unknown> | null | undefined;
+  contextMemory?: SessionContextMemory | undefined;
+  riskAssessment?: IntentRiskAssessment | undefined;
 }
 
 export interface ExamplePrompt {
@@ -400,6 +584,11 @@ export interface ContextGraphNode {
   interpretations: string[];
   linkedSpanId?: string | undefined;
   linkedQuestionId?: string | undefined;
+  supportingEvidence?: string[] | undefined;
+  contradictingEvidence?: string[] | undefined;
+  verifiedCorrectness?: VerifiedCorrectnessState | undefined;
+  abstained?: boolean | undefined;
+  riskLevel?: RiskLevel | undefined;
 }
 
 export interface ContextGraphEdge {
@@ -420,6 +609,8 @@ export interface ContextIntelligenceGraphData {
     resolvedCount: number;
     averageUncertainty: number;
     activeInterpretationTitle: string | null;
+    contradictoryCount?: number | undefined;
+    missingContextCount?: number | undefined;
   };
 }
 
@@ -521,6 +712,7 @@ export interface AnalyzePromptRequest {
   strictness: StrictnessLevel;
   language?: LanguageOption | undefined;
   maxQuestions?: number | undefined;
+  contextSummary?: string | undefined;
 }
 
 export interface ResolveIntentRequest {
@@ -541,21 +733,349 @@ export interface BackendHealthStatus {
   service?: string | undefined;
 }
 
+export interface BackendConfidenceAssessmentDTO {
+  provenance: "live_backend" | "ai_unavailable_abstained";
+  model_confidence_available: boolean;
+  confidence_basis:
+    "backend_evidence_calibrated" | "deterministic_db_grounded" | "insufficient_evidence_abstained";
+  confidence_score: number | null;
+  confidence_band: ConfidenceBand;
+  uncertainty_score: number;
+  evidence_sufficiency_score: number;
+  verified_correctness: VerifiedCorrectnessState;
+  verification_explanation: string;
+  abstained: boolean;
+  abstention_reason: string | null;
+  recommended_action?:
+    "request_clarification" | "resolve_conflicts" | "proceed_verified" | undefined;
+  recommendation_reason?: string | undefined;
+  supporting_evidence: Array<{
+    id: string;
+    polarity: "supporting" | "contradicting";
+    category: string;
+    label: string;
+    detail: string;
+    source: string;
+    impact_weight: number;
+  }>;
+  contradicting_evidence: Array<{
+    id: string;
+    polarity: "supporting" | "contradicting";
+    category: string;
+    label: string;
+    detail: string;
+    source: string;
+    impact_weight: number;
+  }>;
+  missing_context: string[];
+  unresolved_entities: Array<{
+    token: string;
+    kind: string;
+    reason: string;
+    resolved: boolean;
+    resolved_value?: string | null | undefined;
+  }>;
+  calibration_note: string;
+}
+
+export interface BackendConfidenceHistoryDTO {
+  turn_number: number;
+  timestamp: string;
+  event_label: string;
+  trigger_input: string;
+  confidence_score: number | null;
+  confidence_band: ConfidenceBand;
+  verified_correctness: VerifiedCorrectnessState;
+  abstained: boolean;
+  delta_from_previous: number | null;
+  change_reasons: string[];
+  change_summary: string;
+  evidence_count_supporting: number;
+  evidence_count_contradicting: number;
+}
+
+export interface BackendAnalyzeResponse {
+  conversation_id: string;
+  status: "ANALYZING" | "NEEDS_CLARIFICATION" | "RESOLVED" | "FAILED";
+  classification: "clear" | "ambiguous" | "incomplete" | "context_dependent" | null;
+  ambiguity_types: string[];
+  needs_clarification: boolean;
+  interpretations: Array<{
+    label: string;
+    description: string;
+    confidence_score?: number | null | undefined;
+    confidence_status?: "calibrated" | "abstained" | undefined;
+    supporting_signals?: string[] | undefined;
+    contradicting_signals?: string[] | undefined;
+    missing_requirements?: string[] | undefined;
+  }>;
+  missing_required_info: string[];
+  clarification_questions: string[];
+  resolved_intent: {
+    action: string;
+    parameters: Record<string, unknown>;
+    resolved_instruction: string;
+    direct_answer?: string | null | undefined;
+  } | null;
+  inventory_insight?: Record<string, unknown> | null | undefined;
+  turn_count: number;
+  confidence_assessment?: BackendConfidenceAssessmentDTO | null | undefined;
+  confidence_history?: BackendConfidenceHistoryDTO[] | undefined;
+  context_memory?: BackendContextMemoryDTO | null | undefined;
+  risk_assessment?: BackendRiskAssessmentDTO | null | undefined;
+}
+
+// --- FEATURE 8: CONTEXT MEMORY & CONVERSATION INTELLIGENCE ---
+
+export type MemoryEntityCategory = "person" | "object" | "date" | "action" | "reference";
+
+export interface RememberedEntity {
+  id: string;
+  sessionId: string;
+  category: MemoryEntityCategory;
+  label: string;
+  value: string;
+  sourceTurn: number;
+  sourceRole: "user" | "clarification" | "context" | "edited";
+  sourceMessage: string;
+  editedByUser?: boolean | undefined;
+}
+
+export interface SessionReferenceResolution {
+  referenceToken: string;
+  category: "person" | "object" | "date" | "action" | "ordinal";
+  status: "resolved" | "conflicting" | "unclear";
+  resolvedValue: string | null;
+  candidates: string[];
+  sourceTurn?: number | undefined;
+  sourceMessage?: string | undefined;
+  explanation: string;
+  clarificationQuestion?: string | undefined;
+}
+
+export interface SessionMessageEntry {
+  id: string;
+  turnNumber: number;
+  role: "user" | "assistant" | "clarification";
+  content: string;
+  timestamp: string;
+}
+
+export interface SessionContextMemory {
+  sessionId: string;
+  title: string;
+  messages: SessionMessageEntry[];
+  entities: RememberedEntity[];
+  resolvedReferences: SessionReferenceResolution[];
+  referenceConflicts: SessionReferenceResolution[];
+  editedAt?: string | undefined;
+}
+
+export interface BackendContextMemoryDTO {
+  session_id: string;
+  entities: Array<{
+    id: string;
+    session_id: string;
+    category: MemoryEntityCategory;
+    label: string;
+    value: string;
+    source_turn: number;
+    source_role: string;
+    source_message: string;
+  }>;
+  resolved_references: Array<{
+    reference_token: string;
+    category: "person" | "object" | "date" | "action" | "ordinal";
+    status: "resolved" | "conflicting" | "unclear";
+    resolved_value: string | null;
+    candidates: string[];
+    source_turn?: number | null | undefined;
+    source_message?: string | null | undefined;
+    explanation: string;
+    clarification_question?: string | null | undefined;
+  }>;
+  reference_conflicts: Array<{
+    reference_token: string;
+    category: "person" | "object" | "date" | "action" | "ordinal";
+    status: "resolved" | "conflicting" | "unclear";
+    resolved_value: string | null;
+    candidates: string[];
+    source_turn?: number | null | undefined;
+    source_message?: string | null | undefined;
+    explanation: string;
+    clarification_question?: string | null | undefined;
+  }>;
+  turn_count: number;
+}
+
+// --- FEATURE 7: ADVERSARIAL AMBIGUITY TESTING LAB ---
+
+export type AdversarialCategory =
+  | "lexical"
+  | "referential"
+  | "structural"
+  | "contextual"
+  | "semantic"
+  | "underspecification"
+  | "clear";
+
+export type AdversarialChallengeTag =
+  | "long_sentence"
+  | "multi_ambiguity"
+  | "missing_context"
+  | "contradictory"
+  | "multi_turn"
+  | "clear_control"
+  | "ps2_inventory"
+  | "multilingual";
+
+export interface AdversarialTestCase {
+  id: string;
+  title: string;
+  instruction: string;
+  domain: DomainContext;
+  category: AdversarialCategory;
+  tags: AdversarialChallengeTag[];
+  hasValidGroundTruth: boolean;
+  expectedClassification: "clear" | "ambiguous" | "incomplete" | "context_dependent" | null;
+  expectedNeedsClarification: boolean | null;
+  expectedAmbiguities: string[];
+  expectedInterpretations: string[];
+  followUpClarification?: string | undefined;
+  isCustom?: boolean | undefined;
+  notes?: string | undefined;
+}
+
+export type AdversarialRunProvenance =
+  "live_backend_evaluated" | "ai_fallback_mixed" | "client_simulation_evaluated";
+
+export interface AdversarialCaseExecutionResult {
+  caseId: string;
+  title: string;
+  instruction: string;
+  category: AdversarialCategory;
+  tags: AdversarialChallengeTag[];
+  executedAt: string;
+  durationMs: number;
+  provenance: AdversarialRunProvenance;
+  predictedClassification: string;
+  predictedNeedsClarification: boolean;
+  detectedAmbiguities: string[];
+  detectedInterpretations: string[];
+  turnsTaken: number;
+  finalStatus: string;
+  abstained: boolean;
+  verifiedCorrectness: VerifiedCorrectnessState;
+  hasValidGroundTruth: boolean;
+  verdict: "Pass" | "Failed" | "Exploratory (No Ground Truth)" | "Execution Error";
+  correctDetections: string[];
+  missedAmbiguities: string[];
+  falsePositives: string[];
+  resolutionFailure: string | null;
+  failureExplanation: string | null;
+  baselinePredictedNeeds: boolean;
+  baselineMatch: boolean | null;
+  executionError?: string | undefined;
+}
+
+export interface AdversarialMetricsSummary {
+  executedCount: number;
+  groundedCount: number;
+  precision: number | null;
+  recall: number | null;
+  f1Score: number | null;
+  resolutionAccuracy: number | null;
+  falseClarificationRate: number | null;
+  clarificationEfficiency: number | null;
+  truePositives: number;
+  trueNegatives: number;
+  falsePositives: number;
+  falseNegatives: number;
+}
+
+export interface AdversarialExecutionHistoryEntry {
+  runId: string;
+  timestamp: string;
+  provenance: AdversarialRunProvenance;
+  scopeLabel: string;
+  executedCount: number;
+  groundedCount: number;
+  resolveXMetrics: AdversarialMetricsSummary;
+  baselineMetrics: AdversarialMetricsSummary;
+  results: AdversarialCaseExecutionResult[];
+}
+
+export interface BackendEvaluationPs6Response {
+  source: "fresh_run" | "latest_record" | "no_record";
+  message?: string | undefined;
+  evaluation: {
+    run_id: string;
+    model: string;
+    dataset_size: number;
+    adversarial_only?: boolean | undefined;
+    executed_at?: string | undefined;
+    ai_configured?: boolean | undefined;
+    fallback_cases_count?: number | undefined;
+    provenance?: "live_backend_evaluated" | "ai_fallback_mixed" | undefined;
+    precision: number;
+    recall: number;
+    f1_score: number;
+    resolution_accuracy: number;
+    false_clarification_rate: number;
+    clarification_efficiency?: number | undefined;
+    true_positives?: number | undefined;
+    true_negatives?: number | undefined;
+    false_positives?: number | undefined;
+    false_negatives?: number | undefined;
+    baseline_comparison?:
+      | {
+          name: string;
+          precision: number;
+          recall: number;
+          f1_score: number;
+          resolution_accuracy: number;
+          false_clarification_rate: number;
+          clarification_efficiency: number;
+          true_positives: number;
+          true_negatives: number;
+          false_positives: number;
+          false_negatives: number;
+        }
+      | undefined;
+    results_detail?:
+      | Array<{
+          id: string;
+          instruction: string;
+          ambiguity_category?: string | undefined;
+          is_adversarial?: boolean | undefined;
+          tags?: string[] | undefined;
+          expected_classification: string;
+          predicted_classification: string;
+          expected_needs_clarification: boolean;
+          predicted_needs_clarification: boolean;
+          expected_ambiguities?: string[] | undefined;
+          detected_ambiguities?: string[] | undefined;
+          correct_detections?: string[] | undefined;
+          missed_ambiguities?: string[] | undefined;
+          false_positives?: string[] | undefined;
+          resolution_failed?: boolean | undefined;
+          turns_taken?: number | undefined;
+          final_status?: string | undefined;
+          abstained?: boolean | undefined;
+          provenance?: string | undefined;
+          failure_explanation?: string | null | undefined;
+        }>
+      | undefined;
+  } | null;
+}
+
 // ============================================================================
 // REAL FASTAPI BACKEND CONTRACTS (PS6 + PS2 + Evaluation)
 // ============================================================================
 
-export type BackendConversationStatus =
-  | "ANALYZING"
-  | "NEEDS_CLARIFICATION"
-  | "RESOLVED"
-  | "FAILED";
+export type BackendConversationStatus = "ANALYZING" | "NEEDS_CLARIFICATION" | "RESOLVED" | "FAILED";
 
-export type BackendClassification =
-  | "clear"
-  | "ambiguous"
-  | "incomplete"
-  | "context_dependent";
+export type BackendClassification = "clear" | "ambiguous" | "incomplete" | "context_dependent";
 
 export interface BackendInterpretationItem {
   label: string;
@@ -802,7 +1322,4 @@ export interface BackendPs6Evaluation {
 }
 
 export type BackendApiRoleHeader =
-  | "ADMIN"
-  | "INVENTORY_PLANNER"
-  | "PROCUREMENT_MANAGER"
-  | "OPERATIONS_MANAGER";
+  "ADMIN" | "INVENTORY_PLANNER" | "PROCUREMENT_MANAGER" | "OPERATIONS_MANAGER";

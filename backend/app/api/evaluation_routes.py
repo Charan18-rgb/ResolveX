@@ -13,16 +13,19 @@ evaluation_router = APIRouter(prefix="/api/evaluation", tags=["Evaluation"])
 @evaluation_router.get("/ps6")
 def get_ps6_evaluation(
     run_now: bool = False,
+    adversarial_only: bool = False,
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """
     Return the latest PS6 evaluation record from the database.
-    Pass ?run_now=true to trigger a fresh evaluation run (requires GEMINI_API_KEY for best results).
+    Pass ?run_now=true to trigger a fresh evaluation run (or ?adversarial_only=true for focused adversarial suite).
     """
     if run_now:
         try:
             from app.evaluation.ps6_evaluator import run_ps6_evaluation
-            result = run_ps6_evaluation(settings.database_path)
+            result = run_ps6_evaluation(
+                settings.database_path, adversarial_only=adversarial_only
+            )
             return {"source": "fresh_run", "evaluation": result}
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PS6 evaluation failed: {exc}")

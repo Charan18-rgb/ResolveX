@@ -3,9 +3,11 @@ import {
   AlertCircle,
   Boxes,
   CheckCircle2,
+  FlaskConical,
   Languages,
   Play,
   RefreshCw,
+  ShieldCheck,
   TrendingUp,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -19,6 +21,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AdversarialTestingLab } from "@/components/evaluation/AdversarialTestingLab";
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
@@ -32,11 +35,11 @@ export const Route = createFileRoute("/evaluation")({
   component: EvaluationPage,
 });
 
-type EvalDomainTab = "ps2" | "ps6";
+type EvalDomainTab = "adversarial" | "ps6" | "ps2";
 
 function EvaluationPage() {
   const { settings } = useResolveX();
-  const [activeTab, setActiveTab] = useState<EvalDomainTab>("ps2");
+  const [activeTab, setActiveTab] = useState<EvalDomainTab>("adversarial");
   const [ps2Eval, setPs2Eval] = useState<BackendPs2Evaluation | null>(null);
   const [ps6Eval, setPs6Eval] = useState<BackendPs6Evaluation | null>(null);
   const [ps6Source, setPs6Source] = useState<string>("loading");
@@ -77,9 +80,7 @@ function EvaluationPage() {
       setPs6Eval(res.evaluation);
       setPs6Source(res.source);
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : "Language evaluation run failed.",
-      );
+      setErrorMsg(err instanceof Error ? err.message : "Language evaluation run failed.");
     } finally {
       setIsRunningPs6(false);
     }
@@ -108,27 +109,43 @@ function EvaluationPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
-        eyebrow="Live Backend Evaluation"
-        title="Unified Benchmark Telemetry"
-        description="Real measured results executed by backend evaluators against the SQLite inventory database and 48-case ambiguity dataset."
+        eyebrow="Unified Benchmark, Adversarial Lab & Telemetry"
+        title={
+          activeTab === "adversarial"
+            ? "Adversarial Ambiguity Testing Lab"
+            : activeTab === "ps6"
+              ? "Live Language Benchmark Telemetry (PS6)"
+              : "Smart Inventory Intelligence Evaluation (PS2)"
+        }
+        description={
+          activeTab === "adversarial"
+            ? "Stress-test ResolveX on challenging multi-ambiguity, contradictory, missing-context, and custom judge sentences."
+            : "Real measured results executed by backend evaluators against the SQLite inventory database and labeled dataset."
+        }
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              isLoading={isLoadingPs2}
-              iconLeft={<RefreshCw className="h-4 w-4 text-cyan-400" />}
-              onClick={() => void loadEvaluations()}
-            >
-              Refresh Metrics
-            </Button>
-            <Button
-              isLoading={isRunningPs6}
-              iconLeft={<Play className="h-4 w-4" />}
-              onClick={() => void handleRunLivePs6()}
-            >
-              Run 48-Case Language Benchmark
-            </Button>
-          </div>
+          activeTab === "adversarial" ? (
+            <Badge tone="cyan">MEASURED OVER EXECUTED CASES</Badge>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                isLoading={isLoadingPs2}
+                iconLeft={<RefreshCw className="h-4 w-4 text-cyan-400" />}
+                onClick={() => void loadEvaluations()}
+              >
+                Refresh Metrics
+              </Button>
+              {activeTab === "ps6" && (
+                <Button
+                  isLoading={isRunningPs6}
+                  iconLeft={<Play className="h-4 w-4" />}
+                  onClick={() => void handleRunLivePs6()}
+                >
+                  Run Language Benchmark
+                </Button>
+              )}
+            </div>
+          )
         }
       />
 
@@ -144,19 +161,19 @@ function EvaluationPage() {
         </div>
       )}
 
-      {/* Domain Switcher */}
-      <div className="inline-flex rounded-xl border border-white/10 bg-slate-900/75 p-1">
+      {/* Domain Switcher: Adversarial Lab vs PS6 vs PS2 */}
+      <div className="inline-flex flex-wrap rounded-xl border border-white/10 bg-slate-900/75 p-1 gap-1">
         <button
           type="button"
-          onClick={() => setActiveTab("ps2")}
+          onClick={() => setActiveTab("adversarial")}
           className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
-            activeTab === "ps2"
-              ? "bg-gradient-to-r from-cyan-600/80 to-violet-600/80 text-white shadow"
+            activeTab === "adversarial"
+              ? "bg-gradient-to-r from-cyan-600/85 to-violet-600/85 text-white shadow"
               : "text-slate-300 hover:text-white"
           }`}
         >
-          <Boxes className="h-4 w-4" />
-          Inventory Intelligence Evaluation
+          <ShieldCheck className="h-4 w-4" />
+          Adversarial Testing Lab
         </button>
         <button
           type="button"
@@ -168,11 +185,25 @@ function EvaluationPage() {
           }`}
         >
           <Languages className="h-4 w-4" />
-          Language Understanding Benchmark
+          Language Benchmark (PS6)
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ps2")}
+          className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
+            activeTab === "ps2"
+              ? "bg-gradient-to-r from-cyan-600/80 to-violet-600/80 text-white shadow"
+              : "text-slate-300 hover:text-white"
+          }`}
+        >
+          <Boxes className="h-4 w-4" />
+          Inventory Allocation Evaluation (PS2)
         </button>
       </div>
 
-      {activeTab === "ps2" ? (
+      {activeTab === "adversarial" ? (
+        <AdversarialTestingLab />
+      ) : activeTab === "ps2" ? (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="space-y-1.5">
@@ -210,72 +241,40 @@ function EvaluationPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <Card className="lg:col-span-5 space-y-4">
-              <h3 className="text-base font-semibold text-white">
-                ResolveX vs. Reactive FIFO Baseline (%)
-              </h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ps2ChartData} margin={{ top: 10, right: 16, left: -16, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="name" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
-                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0a0f1f",
-                        borderColor: "rgba(255,255,255,0.14)",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                      }}
-                    />
-                    <Bar dataKey="accuracy" name="Accuracy %" fill="#06b6d4" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              {ps2Eval && <p className="text-xs text-slate-400">{ps2Eval.note}</p>}
-            </Card>
-
-            <Card padding="none" className="lg:col-span-7 overflow-hidden">
-              <div className="border-b border-white/10 p-5">
+          <Card className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
                 <h3 className="text-base font-semibold text-white">
-                  Scenario Verification Breakdown
+                  ResolveX Earliest-CRD vs. Reactive FIFO Baseline
                 </h3>
+                <p className="text-xs text-slate-400">
+                  CRD lookahead allocation reduces delivery risk over standard FIFO
+                </p>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs sm:text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-slate-400">
-                      <th className="px-4 py-3">Scenario</th>
-                      <th className="px-4 py-3">Details</th>
-                      <th className="px-4 py-3">Result</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/8">
-                    {(ps2Eval?.results_detail ?? []).map((row, idx) => (
-                      <tr key={idx}>
-                        <td className="px-4 py-3 font-mono text-cyan-300">
-                          {String(row["scenario"] ?? "")}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-300">
-                          {JSON.stringify(
-                            Object.fromEntries(
-                              Object.entries(row).filter(([k]) => k !== "scenario" && k !== "pass"),
-                            ),
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge tone={row["pass"] ? "emerald" : "rose"}>
-                            {row["pass"] ? "PASS" : "FAIL"}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </div>
+              <Badge tone="emerald">
+                <CheckCircle2 className="h-3 w-3" />
+                Deterministic Verification
+              </Badge>
+            </div>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ps2ChartData} margin={{ top: 10, right: 16, left: -16, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                  <XAxis dataKey="name" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0a0f1f",
+                      borderColor: "rgba(255,255,255,0.14)",
+                      borderRadius: "12px",
+                      color: "#f8fafc",
+                    }}
+                  />
+                  <Bar dataKey="accuracy" name="Accuracy %" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
         </div>
       ) : (
         <div className="space-y-6">
@@ -335,7 +334,10 @@ function EvaluationPage() {
                 </div>
                 <div className="h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={ps6ChartData} margin={{ top: 10, right: 16, left: -16, bottom: 5 }}>
+                    <BarChart
+                      data={ps6ChartData}
+                      margin={{ top: 10, right: 16, left: -16, bottom: 5 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
                       <XAxis dataKey="metric" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
                       <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />

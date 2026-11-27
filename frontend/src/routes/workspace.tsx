@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
+  Brain,
   CheckCircle2,
   Clock,
   Eye,
@@ -8,6 +9,7 @@ import {
   History,
   MessageSquareMore,
   Package,
+  RotateCcw,
   SearchCheck,
   Trash2,
 } from "lucide-react";
@@ -15,6 +17,7 @@ import { AnalysisProgressBanner } from "@/components/resolvex/AnalysisProgressBa
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { ContextMemoryPanel } from "@/components/resolvex/ContextMemoryPanel";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { PromptInputCard } from "@/components/resolvex/PromptInputCard";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
@@ -39,6 +42,10 @@ function WorkspacePage() {
     analysisStage,
     analysisStageLabel,
     activeAnalysis,
+    sessionMemory,
+    continueInSession,
+    setContinueInSession,
+    startNewIsolatedSession,
     sessionHistory,
     runAnalysis,
     selectExamplePrompt,
@@ -140,6 +147,95 @@ function WorkspacePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-8 space-y-6">
+          <Card className="border-indigo-400/20 bg-slate-900/60 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Brain className="h-4 w-4 text-cyan-300" />
+                <span className="text-xs font-semibold text-slate-200">
+                  Session Memory Mode ({sessionMemory.messages.length}{" "}
+                  {sessionMemory.messages.length === 1 ? "turn" : "turns"} •{" "}
+                  {sessionMemory.entities.length} remembered)
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setContinueInSession(true)}
+                  className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    continueInSession
+                      ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-200"
+                      : "border-white/10 bg-white/4 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Follow-up in Active Session
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContinueInSession(false)}
+                  className={`cursor-pointer rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    !continueInSession
+                      ? "border-violet-400/50 bg-violet-500/15 text-violet-200"
+                      : "border-white/10 bg-white/4 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  New Isolated Session
+                </button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => startNewIsolatedSession()}
+                  className="text-xs"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset Session
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-white/8 pt-2.5">
+              <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                Multi-Turn Memory Demo:
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const p =
+                    "Review Q3_Finance_Report.pdf and Budget_2026.xlsx with Rahul Sharma tomorrow.";
+                  setPromptInput(p);
+                  setContinueInSession(true);
+                  void runAnalysis(p, domain, strictness, { forceSessionMode: "new" });
+                }}
+                className="cursor-pointer rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-200 hover:bg-cyan-500/20"
+              >
+                1. Load Files &amp; Rahul Sharma
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = "Email him the second one next week.";
+                  setPromptInput(p);
+                  setContinueInSession(true);
+                  void runAnalysis(p, domain, strictness, { forceSessionMode: "continue" });
+                }}
+                className="cursor-pointer rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/20"
+              >
+                2. Resolve &quot;him&quot; &amp; &quot;the second one&quot;
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const p = "Send that file to Rahul Verma instead of Priya Nair before Friday.";
+                  setPromptInput(p);
+                  setContinueInSession(true);
+                  void runAnalysis(p, domain, strictness, { forceSessionMode: "continue" });
+                }}
+                className="cursor-pointer rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-500/20"
+              >
+                3. Trigger Reference Conflict
+              </button>
+            </div>
+          </Card>
+
           <PromptInputCard
             prompt={promptInput}
             onPromptChange={setPromptInput}
@@ -160,6 +256,11 @@ function WorkspacePage() {
             showControls={true}
             showExamples={true}
             analyzeLabel="Analyze & Open Pipeline"
+          />
+
+          <ContextMemoryPanel
+            title="Active Session Context Memory & Entity Tracker"
+            onResolveConflictClick={() => void navigate({ to: "/clarification" })}
           />
 
           <div className="space-y-3">

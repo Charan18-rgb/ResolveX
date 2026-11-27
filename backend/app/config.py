@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # CORS origins (comma-separated string in .env)
     allowed_origins: str = Field(
-        default="http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+        default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
     )
 
     @field_validator("gemini_model", "database_path")

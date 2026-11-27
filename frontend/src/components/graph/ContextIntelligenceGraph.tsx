@@ -240,6 +240,12 @@ export function ContextIntelligenceGraph({
           <Badge tone="amber">{graph.summary.ambiguousCount} Ambiguous</Badge>
           <Badge tone="slate">{graph.summary.unresolvedCount} Unresolved</Badge>
           <Badge tone="emerald">{graph.summary.resolvedCount} Resolved</Badge>
+          {(graph.summary.contradictoryCount ?? 0) > 0 && (
+            <Badge tone="rose">{graph.summary.contradictoryCount} Contradictory</Badge>
+          )}
+          {(graph.summary.missingContextCount ?? 0) > 0 && (
+            <Badge tone="amber">{graph.summary.missingContextCount} Missing Ctx</Badge>
+          )}
         </div>
       </div>
 
@@ -654,7 +660,55 @@ export function ContextIntelligenceGraph({
                   />
                 </div>
                 <p className="text-[11px] text-slate-400">{selectedNode.uncertaintyReason}</p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {selectedNode.abstained && (
+                    <Badge tone="rose">Abstained (Insufficient Evidence)</Badge>
+                  )}
+                  {selectedNode.verifiedCorrectness && (
+                    <Badge
+                      tone={
+                        selectedNode.verifiedCorrectness === "verified"
+                          ? "emerald"
+                          : selectedNode.verifiedCorrectness === "contradictory"
+                            ? "rose"
+                            : "amber"
+                      }
+                    >
+                      Status: {selectedNode.verifiedCorrectness.replace("_", " ")}
+                    </Badge>
+                  )}
+                </div>
               </div>
+
+              {((selectedNode.supportingEvidence?.length ?? 0) > 0 ||
+                (selectedNode.contradictingEvidence?.length ?? 0) > 0) && (
+                <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3 space-y-2 text-[11px]">
+                  {(selectedNode.supportingEvidence?.length ?? 0) > 0 && (
+                    <div className="space-y-1">
+                      <p className="font-semibold text-emerald-300 uppercase tracking-wider">
+                        Supporting Evidence
+                      </p>
+                      {selectedNode.supportingEvidence?.map((ev) => (
+                        <p key={ev} className="text-slate-300 leading-relaxed">
+                          + {ev}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {(selectedNode.contradictingEvidence?.length ?? 0) > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-white/10">
+                      <p className="font-semibold text-rose-300 uppercase tracking-wider">
+                        Contradicting Evidence
+                      </p>
+                      {selectedNode.contradictingEvidence?.map((ev) => (
+                        <p key={ev} className="text-rose-200/90 leading-relaxed">
+                          ! {ev}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">

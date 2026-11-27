@@ -355,3 +355,54 @@ def get_latest_evaluation_record(db_path: str) -> Optional[dict[str, Any]]:
         return dict(row) if row else None
     except sqlite3.Error as exc:
         raise DatabaseOperationError("Failed to fetch latest evaluation record.") from exc
+
+
+def save_confidence_snapshot(
+    db_path: str,
+    conversation_id: str,
+    turn_number: int,
+    snapshot: dict[str, Any],
+    assessment: dict[str, Any],
+) -> None:
+    """Persist a turn-level confidence history point and full assessment."""
+    now = _utc_now_iso()
+    try:
+        with get_connection(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO confidence_snapshots (
+                    conversation_id, turn_number, snapshot_json, assessment_json, created_at
+                ) VALUES (?, ?, ?, ?, ?);
+                """,
+                (
+                    conversation_id,
+                    turn_number,
+                    json.dumps(snapshot),
+                    json.dumps(assessment),
+                    now,
+                ),
+            )
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to save confidence snapshot.") from exc
+
+
+def get_confidence_history(
+    db_path: str, conversation_id: str
+) -> tuple[list[dict[str, Any]], Optional[dict[str, Any]]]:
+    """Return chronological confidence snapshots and latest assessment for a conversation."""
+    try:
+        with get_connection(db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT snapshot_json, assessment_json
+                FROM confidence_snapshots
+                WHERE conversation_id = ?
+                ORDER BY turn_number ASC, id ASC;
+                """,
+                (conversation_id,),
+            ).fetchall()
+        history = [json.loads(r["snapshot_json"]) for r in rows]
+        latest_assessment = json.loads(rows[-1]["assessment_json"]) if rows else None
+        return history, latest_assessment
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to fetch confidence history.") from exc

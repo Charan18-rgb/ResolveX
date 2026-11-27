@@ -18,10 +18,13 @@ import { useState, type FormEvent } from "react";
 import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { ConfidenceUncertaintyPanel } from "@/components/resolvex/ConfidenceUncertaintyPanel";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { VerificationSummaryPanel } from "@/components/resolvex/VerificationSummaryPanel";
+import { ContextMemoryPanel } from "@/components/resolvex/ContextMemoryPanel";
+import { RiskAssessmentPanel } from "@/components/resolvex/RiskAssessmentPanel";
 import { useResolveX } from "@/context/useResolveX";
 import { CATEGORY_STYLE_MAP } from "@/data/categoryStyles";
 import { localizeClarificationQuestion, localizeSelectionReason } from "@/data/multilingualEngine";
@@ -37,12 +40,17 @@ function ClarificationPage() {
     selectedInterpretation,
     optimizerState,
     verificationReport,
+    confidenceAssessment,
+    liveBackendNotice,
     focusedQuestionId,
     focusClarificationQuestion,
     language,
     uiLanguage,
     allowOptionalRefinement,
     setAllowOptionalRefinement,
+    riskAssessment,
+    userConfirmedHighRisk,
+    setUserConfirmedHighRisk,
     submitClarificationTurn,
     isSubmittingClarification,
     apiError,
@@ -131,13 +139,25 @@ function ClarificationPage() {
   };
 
   const handleGenerateResolution = async () => {
-    if (!verificationReport.allRequiredPassed) {
+    if (
+      !verificationReport.allRequiredPassed ||
+      confidenceAssessment.abstained ||
+      !riskAssessment.safeToResolve
+    ) {
       const firstFailing = verificationReport.fieldChecks.find(
         (c) =>
           c.required &&
           (c.status === "Missing" || c.status === "Ambiguous" || c.status === "Contradictory"),
       );
-      setVerificationGateAlert(verificationReport.completenessExplanation);
+      setVerificationGateAlert(
+        !riskAssessment.safeToResolve
+          ? (riskAssessment.confirmationReason ??
+              "High-risk intent detected. Explicit confirmation or high-impact clarification is required before resolving.")
+          : confidenceAssessment.abstained
+            ? (confidenceAssessment.abstentionReason ??
+              "Engine abstained due to insufficient or contradictory evidence. Resolve open conflicts before finalizing.")
+            : verificationReport.completenessExplanation,
+      );
       if (firstFailing?.targetQuestionId) {
         focusClarificationQuestion(firstFailing.targetQuestionId);
       }
@@ -457,8 +477,14 @@ function ClarificationPage() {
                         placeholder={`Specify exact constraint for "${displayedQuestion.targetToken}"...`}
                         className="flex-1 rounded-xl border border-white/12 bg-[#050814]/90 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none disabled:opacity-60"
                       />
-                      <Button type="submit" variant="secondary" isLoading={isSubmittingClarification}>
-                        {isSubmittingClarification ? "Sending to Gemini..." : "Submit Clarification"}
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        isLoading={isSubmittingClarification}
+                      >
+                        {isSubmittingClarification
+                          ? "Sending to Gemini..."
+                          : "Submit Clarification"}
                       </Button>
                     </div>
                     {customError && (
@@ -695,6 +721,42 @@ function ClarificationPage() {
           </Card>
         </div>
       </div>
+
+      {/* Feature 9: Risk-Aware Intent Assessment & Guardrails */}
+      <RiskAssessmentPanel
+        assessment={riskAssessment}
+        userConfirmed={userConfirmedHighRisk}
+        onConfirmHighRisk={setUserConfirmedHighRisk}
+        onRequestClarification={() => {
+          if (activeQuestion) {
+            focusClarificationQuestion(activeQuestion.id);
+          }
+        }}
+      />
+
+      {/* Live Confidence, Evidence & Turn History */}
+      <ConfidenceUncertaintyPanel
+        assessment={confidenceAssessment}
+        showHistory
+        liveBackendNotice={liveBackendNotice}
+        title="Live Confidence & Turn-by-Turn Evidence History"
+      />
+
+      <ContextMemoryPanel
+        compact
+        title="Session Memory & Coreference Conflicts"
+        onResolveConflictClick={(token) => {
+          const match = activeAnalysis.clarificationQuestions.find(
+            (q) =>
+              q.targetToken.toLowerCase().includes(token.toLowerCase()) ||
+              q.targetSpanId.toLowerCase().includes(token.toLowerCase()) ||
+              q.question.toLowerCase().includes(token.toLowerCase()),
+          );
+          if (match) {
+            focusClarificationQuestion(match.id);
+          }
+        }}
+      />
     </div>
   );
 }

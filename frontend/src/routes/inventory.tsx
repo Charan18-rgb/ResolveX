@@ -83,9 +83,9 @@ function InventoryHubPage() {
 
   const roleConfig = DEMO_ROLES.find((r) => r.role === activeRole) ?? DEMO_ROLES[0];
   const [activeTab, setActiveTab] = useState<InventoryTab>(roleConfig?.primaryTab ?? "materials");
-  const [stockFilter, setStockFilter] = useState<
-    BackendMaterialOverview["stock_status"] | "All"
-  >("All");
+  const [stockFilter, setStockFilter] = useState<BackendMaterialOverview["stock_status"] | "All">(
+    "All",
+  );
   const [actionFeedback, setActionFeedback] = useState<{
     tone: "emerald" | "rose" | "amber";
     message: string;
@@ -413,9 +413,7 @@ function InventoryHubPage() {
             <Clock className="h-4 w-4 text-amber-400" />
           </div>
           <p className="font-mono text-3xl font-bold text-amber-300">{crdRiskCount}</p>
-          <p className="text-xs text-slate-400">
-            Out of {backendOrderRisks.length} OPEN orders
-          </p>
+          <p className="text-xs text-slate-400">Out of {backendOrderRisks.length} OPEN orders</p>
         </Card>
 
         <Card className="space-y-1.5">
@@ -542,7 +540,9 @@ function InventoryHubPage() {
                       </td>
                       <td className="px-4 py-3.5 text-xs text-slate-300">
                         {mat.reorder_threshold} {mat.unit} •{" "}
-                        {mat.lead_time_days != null ? `${mat.lead_time_days}d lead` : "No lead time"}
+                        {mat.lead_time_days != null
+                          ? `${mat.lead_time_days}d lead`
+                          : "No lead time"}
                       </td>
                       <td className="px-4 py-3.5">
                         <Badge tone={STOCK_TONE[mat.stock_status]}>{mat.stock_status}</Badge>
@@ -847,9 +847,7 @@ function InventoryHubPage() {
               </h3>
             </div>
             {backendAlerts.length === 0 ? (
-              <Card className="py-6 text-center text-xs text-slate-400">
-                No alerts recorded.
-              </Card>
+              <Card className="py-6 text-center text-xs text-slate-400">No alerts recorded.</Card>
             ) : (
               <div className="space-y-2.5">
                 {backendAlerts.map((alert) => (

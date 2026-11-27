@@ -1,11 +1,4 @@
-import {
-  CheckCircle2,
-  Database,
-  FileSearch,
-  Lightbulb,
-  ShieldAlert,
-  Sparkles,
-} from "lucide-react";
+import { CheckCircle2, Database, FileSearch, Lightbulb, ShieldAlert, Sparkles } from "lucide-react";
 import type { AnalysisResult, FinalResolution } from "@/types/resolvex";
 import { Badge } from "./Badge";
 import { Card } from "./Card";
@@ -82,7 +75,9 @@ export function ExplainabilityLedger({
         .join(" | ")}.`,
     );
   } else if (isResolved) {
-    interpretationsSummary.push("No competing interpretations detected; instruction is unambiguous.");
+    interpretationsSummary.push(
+      "No competing interpretations detected; instruction is unambiguous.",
+    );
   }
 
   // 4. Estimates, Assumptions & Recommendations

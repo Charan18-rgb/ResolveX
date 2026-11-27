@@ -19,6 +19,9 @@ import { ContextIntelligenceGraph } from "@/components/graph/ContextIntelligence
 import { Badge, type BadgeTone } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { ConfidenceUncertaintyPanel } from "@/components/resolvex/ConfidenceUncertaintyPanel";
+import { ContextMemoryPanel } from "@/components/resolvex/ContextMemoryPanel";
+import { RiskAssessmentPanel } from "@/components/resolvex/RiskAssessmentPanel";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
@@ -32,6 +35,7 @@ export const Route = createFileRoute("/interpretations")({
 
 const RISK_TONE: Record<RiskLevel, BadgeTone> = {
   Low: "emerald",
+  Medium: "amber",
   Moderate: "amber",
   High: "rose",
   Critical: "rose",
@@ -47,6 +51,9 @@ function InterpretationsPage() {
   const navigate = useNavigate();
   const {
     activeAnalysis,
+    enrichedInterpretations,
+    confidenceAssessment,
+    liveBackendNotice,
     selectedInterpretationId,
     setSelectedInterpretationId,
     selectedInterpretation,
@@ -57,7 +64,13 @@ function InterpretationsPage() {
     sendScenarioToClarification,
     resetInterpretationSimulation,
     focusClarificationQuestion,
+    riskAssessment,
+    userConfirmedHighRisk,
+    setUserConfirmedHighRisk,
   } = useResolveX();
+
+  const scenarios =
+    enrichedInterpretations.length > 0 ? enrichedInterpretations : activeAnalysis.interpretations;
 
   const [viewMode, setViewMode] = useState<"cards" | "matrix">("cards");
   const [onlyDiffs, setOnlyDiffs] = useState(false);
@@ -150,6 +163,30 @@ function InterpretationsPage() {
         uiLanguage={uiLanguage}
       />
 
+      <ConfidenceUncertaintyPanel
+        compact
+        assessment={confidenceAssessment}
+        liveBackendNotice={liveBackendNotice}
+        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        title="Confidence vs. Verified Correctness Overview"
+      />
+
+      <ContextMemoryPanel
+        compact
+        title="Session Memory & Resolved Scenario Entities"
+        onResolveConflictClick={() => void navigate({ to: "/clarification" })}
+      />
+
+      {/* Feature 9: Risk-Aware Intent Guardrails */}
+      <RiskAssessmentPanel
+        compact
+        assessment={riskAssessment}
+        userConfirmed={userConfirmedHighRisk}
+        onConfirmHighRisk={setUserConfirmedHighRisk}
+        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        title="Scenario Risk Classification & Safety Guardrails"
+      />
+
       <Card padding="sm" className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <GitBranch className="h-4 w-4 shrink-0 text-violet-400" />
@@ -169,15 +206,23 @@ function InterpretationsPage() {
             <thead>
               <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-400">
                 <th className="px-5 py-3.5 w-44">Structured Dimension</th>
-                {activeAnalysis.interpretations.map((interp, idx) => {
+                {scenarios.map((interp, idx) => {
                   const isSelected = interp.id === selectedInterpretationId;
+                  const isAbstained = interp.confidenceStatus === "abstained";
+                  const confLabel = isAbstained
+                    ? "Abstained"
+                    : interp.confidenceScore != null
+                      ? `${Math.round(interp.confidenceScore * 100)}%`
+                      : `${interp.probability}%`;
                   return (
                     <th key={interp.id} className="px-5 py-3.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-white font-semibold normal-case">
                           #{idx + 1} {interp.title}
                         </span>
-                        <Badge tone={isSelected ? "cyan" : "slate"}>{interp.probability}%</Badge>
+                        <Badge tone={isAbstained ? "rose" : isSelected ? "cyan" : "slate"}>
+                          {confLabel}
+                        </Badge>
                       </div>
                     </th>
                   );
@@ -257,9 +302,15 @@ function InterpretationsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {activeAnalysis.interpretations.map((interp, idx) => {
+          {scenarios.map((interp, idx) => {
             const isSelected = interp.id === selectedInterpretationId;
             const sim = interp.simulatedIntent;
+            const isAbstained = interp.confidenceStatus === "abstained";
+            const confLabel = isAbstained
+              ? "Abstained"
+              : interp.confidenceScore != null
+                ? `${Math.round(interp.confidenceScore * 100)}% Conf`
+                : `${interp.probability}%`;
             return (
               <Card
                 key={interp.id}
@@ -270,18 +321,46 @@ function InterpretationsPage() {
               >
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Badge tone={idx === 0 ? "violet" : "slate"}>
-                      Scenario #{idx + 1} • {interp.probability}%
+                    <Badge tone={isAbstained ? "rose" : idx === 0 ? "violet" : "slate"}>
+                      Scenario #{idx + 1} • {confLabel}
                     </Badge>
                     <Badge tone={RISK_TONE[interp.riskLevel]}>{interp.riskLevel} Risk</Badge>
                   </div>
 
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400"
-                      style={{ width: `${interp.probability}%` }}
+                      className={`h-full rounded-full ${
+                        isAbstained
+                          ? "bg-rose-500/60"
+                          : "bg-gradient-to-r from-violet-500 to-cyan-400"
+                      }`}
+                      style={{
+                        width: `${isAbstained ? 18 : interp.confidenceScore != null ? Math.round(interp.confidenceScore * 100) : interp.probability}%`,
+                      }}
                     />
                   </div>
+
+                  {((interp.supportingSignals?.length ?? 0) > 0 ||
+                    (interp.contradictingSignals?.length ?? 0) > 0 ||
+                    (interp.missingRequirements?.length ?? 0) > 0) && (
+                    <div className="rounded-xl border border-white/8 bg-[#050814]/75 p-2.5 space-y-1 text-[11px]">
+                      {interp.supportingSignals?.slice(0, 2).map((s) => (
+                        <p key={s} className="text-emerald-300/90">
+                          + {s}
+                        </p>
+                      ))}
+                      {interp.contradictingSignals?.slice(0, 2).map((c) => (
+                        <p key={c} className="text-rose-300/90">
+                          ! {c}
+                        </p>
+                      ))}
+                      {interp.missingRequirements?.slice(0, 1).map((m) => (
+                        <p key={m} className="text-amber-200/85">
+                          ? Missing: {m}
+                        </p>
+                      ))}
+                    </div>
+                  )}
 
                   <div>
                     <h3 className="text-lg font-semibold text-white">{interp.title}</h3>

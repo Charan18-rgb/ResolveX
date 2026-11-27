@@ -16,9 +16,11 @@ import type {
   BackendShortageItem,
   ClarificationAnswer,
   ClarificationOptimizerState,
+  ConfidenceAssessment,
   ContextIntelligenceGraphData,
   DomainContext,
   FinalResolution,
+  IntentRiskAssessment,
   Interpretation,
   InventoryApprovalItem,
   InventoryMaterial,
@@ -29,6 +31,7 @@ import type {
   ResolvedLanguage,
   ResolutionVerificationReport,
   ScenarioDimensionDiff,
+  SessionContextMemory,
   SessionHistoryItem,
   StrictnessLevel,
   UserDemoRole,
@@ -66,6 +69,9 @@ export interface ResolveXContextValue {
   clarificationAnswers: ClarificationAnswer[];
   optimizerState: ClarificationOptimizerState;
   verificationReport: ResolutionVerificationReport;
+  confidenceAssessment: ConfidenceAssessment;
+  enrichedInterpretations: Interpretation[];
+  liveBackendNotice: string | null;
   contextGraph: ContextIntelligenceGraphData;
   focusedQuestionId: string | null;
   focusClarificationQuestion: (questionId: string | null) => void;
@@ -91,12 +97,28 @@ export interface ResolveXContextValue {
     customPrompt?: string,
     customDomain?: DomainContext,
     customStrictness?: StrictnessLevel,
+    options?: { forceSessionMode?: "new" | "continue" },
   ) => Promise<AnalysisResult>;
   selectExamplePrompt: (exampleId: string) => Promise<AnalysisResult>;
   selectMultilingualSample: (sampleId: string) => Promise<AnalysisResult>;
   generateFinalResolution: () => Promise<FinalResolution>;
   loadHistorySession: (item: SessionHistoryItem) => Promise<void>;
   clearHistory: () => void;
+
+  // Feature 8: Context Memory & Conversation Intelligence (Session-Isolated)
+  activeSessionId: string;
+  sessionMemory: SessionContextMemory;
+  continueInSession: boolean;
+  setContinueInSession: (value: boolean) => void;
+  startNewIsolatedSession: () => void;
+  updateMemoryEntity: (entityId: string, newValue: string) => void;
+  deleteMemoryEntity: (entityId: string) => void;
+  clearCurrentSessionMemory: () => void;
+
+  // Feature 9: Risk-Aware Intent Resolution
+  riskAssessment: IntentRiskAssessment;
+  userConfirmedHighRisk: boolean;
+  setUserConfirmedHighRisk: (confirmed: boolean) => void;
 
   // PS2 Smart Inventory Intelligence & Role Views
   activeRole: UserDemoRole;

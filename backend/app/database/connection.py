@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS evaluation_records (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS confidence_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT NOT NULL,
+    turn_number INTEGER NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    assessment_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_confidence_conv_turn
+    ON confidence_snapshots(conversation_id, turn_number, id);
+
 CREATE INDEX IF NOT EXISTS idx_conversations_updated_at
     ON conversations(updated_at DESC);
 

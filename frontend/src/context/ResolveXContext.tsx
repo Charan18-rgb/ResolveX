@@ -13,6 +13,15 @@ import {
   DEFAULT_APP_SETTINGS,
   EXAMPLE_PROMPTS,
 } from "@/data/mockData";
+import {
+  appendMessageToSessionMemory,
+  applySessionMemoryToAnalysis,
+  createEmptySessionMemory,
+  recomputeMemoryReferencesForPrompt,
+  serializeSessionMemoryForContext,
+} from "@/data/contextMemoryEngine";
+import { evaluateClientIntentRisk } from "@/data/riskEngine";
+import { generateDecisionTimeline } from "@/data/decisionTimelineEngine";
 import { MULTILINGUAL_SAMPLE_CASES, resolveUiLanguage } from "@/data/multilingualEngine";
 import {
   adaptBackendAnalysisToUi,
@@ -44,6 +53,7 @@ import type {
   LanguageOption,
   NotificationItem,
   PurchaseRecommendation,
+  SessionContextMemory,
   SessionHistoryItem,
   StrictnessLevel,
   UserDemoRole,
@@ -88,6 +98,18 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   const [clarificationAnswers, setClarificationAnswers] = useState<ClarificationAnswer[]>([]);
   const [allowOptionalRefinement, setAllowOptionalRefinement] = useState(false);
   const [focusedQuestionId, setFocusedQuestionId] = useState<string | null>(null);
+  const [liveBackendNotice, setLiveBackendNotice] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string>("sess-initial");
+  const [continueInSession, setContinueInSession] = useState<boolean>(true);
+  const [sessionMemories, setSessionMemories] = useState<Record<string, SessionContextMemory>>(
+    () => ({
+      "sess-initial": appendMessageToSessionMemory(
+        createEmptySessionMemory("sess-initial", initialPreset.prompt.slice(0, 48)),
+        initialPreset.prompt,
+        "user",
+      ),
+    }),
+  );
   const [finalResolution, setFinalResolution] = useState<FinalResolution>(
     initialPreset.defaultResolution,
   );
@@ -132,10 +154,12 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   ]);
 
   const isAnalyzingRef = useRef(false);
-
   const clearApiError = useCallback(() => setApiError(null), []);
 
-  // Hydrate persisted settings safely on client only
+  // Feature 9: Risk-Aware Intent Confirmation State
+  const [userConfirmedHighRisk, setUserConfirmedHighRisk] = useState(false);
+
+  // Hydrate persisted settings & history safely on client only
   useEffect(() => {
     try {
       const rawSettings = localStorage.getItem(STORAGE_KEYS.settings);
@@ -306,7 +330,8 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         id: o.order_id,
         orderNumber: o.order_id,
         customer: o.customer_name,
-        priority: o.risk_category === "BLOCKED" || o.risk_category === "DELAYED" ? "VIP" : "Standard",
+        priority:
+          o.risk_category === "BLOCKED" || o.risk_category === "DELAYED" ? "VIP" : "Standard",
         crdDate: o.customer_request_date,
         daysUntilCrd: daysUntil,
         requiredSku: o.product_code,
@@ -360,11 +385,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       qty: p.suggested_quantity,
       crdImpact: p.estimated_impact,
       status:
-        p.status === "APPROVED"
-          ? "Approved"
-          : p.status === "REJECTED"
-            ? "Rejected"
-            : "Pending",
+        p.status === "APPROVED" ? "Approved" : p.status === "REJECTED" ? "Rejected" : "Pending",
       note: p.reason,
     }));
   }, [backendProposals, mockApprovals, settings.integrationMode]);
@@ -381,8 +402,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       title: `${a.alert_type} • ${a.entity_id}`,
       detail: a.message,
       category: "PS2",
-      severity:
-        a.severity === "CRITICAL" ? "critical" : a.severity === "HIGH" ? "warning" : "info",
+      severity: a.severity === "CRITICAL" ? "critical" : a.severity === "HIGH" ? "warning" : "info",
       route: "/inventory",
       read: a.acknowledged || readNotificationIds.has(`alert-${a.id}`),
     }));
@@ -391,6 +411,13 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   const uiLanguage = useMemo(
     () => resolveUiLanguage(language, activeAnalysis.multilingual.detectedLanguage),
     [activeAnalysis.multilingual.detectedLanguage, language],
+  );
+
+  const sessionMemory = useMemo<SessionContextMemory>(
+    () =>
+      sessionMemories[activeSessionId] ??
+      createEmptySessionMemory(activeSessionId, activeAnalysis.prompt.slice(0, 48)),
+    [activeAnalysis.prompt, activeSessionId, sessionMemories],
   );
 
   const selectedInterpretation = useMemo(
@@ -429,6 +456,70 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     [activeAnalysis, clarificationAnswers, selectedInterpretation],
   );
 
+  // Feature 9: Risk-Aware Intent Assessment (Recalculated after every turn)
+  const riskAssessment = useMemo(
+    () =>
+      evaluateClientIntentRisk({
+        prompt: activeAnalysis.prompt,
+        answers: clarificationAnswers,
+        verificationReport,
+        selectedInterpretation,
+        userConfirmed: userConfirmedHighRisk,
+        backendAssessment: activeAnalysis.riskAssessment
+          ? {
+              risk_level: activeAnalysis.riskAssessment.riskLevel,
+              risk_score: activeAnalysis.riskAssessment.riskScore,
+              requires_explicit_confirmation:
+                activeAnalysis.riskAssessment.requiresExplicitConfirmation,
+              confirmation_reason: activeAnalysis.riskAssessment.confirmationReason,
+              high_impact_ambiguities: activeAnalysis.riskAssessment.highImpactAmbiguities,
+              risk_factors: activeAnalysis.riskAssessment.riskFactors.map((f) => ({
+                dimension: f.dimension,
+                level: f.level,
+                label: f.label,
+                description: f.description,
+                target_token: f.targetToken,
+                requires_confirmation: f.requiresConfirmation,
+              })),
+              action_type: activeAnalysis.riskAssessment.actionType,
+              target_summary: activeAnalysis.riskAssessment.targetSummary,
+              reversibility: activeAnalysis.riskAssessment.reversibility,
+              mitigation_guidance: activeAnalysis.riskAssessment.mitigationGuidance,
+              safe_to_resolve: activeAnalysis.riskAssessment.safeToResolve,
+            }
+          : undefined,
+      }),
+    [
+      activeAnalysis.prompt,
+      activeAnalysis.riskAssessment,
+      clarificationAnswers,
+      selectedInterpretation,
+      userConfirmedHighRisk,
+      verificationReport,
+    ],
+  );
+
+  const confidenceBundle = useMemo(
+    () =>
+      resolveXService.evaluateConfidenceAndUncertainty(
+        activeAnalysis,
+        clarificationAnswers,
+        selectedInterpretation,
+        verificationReport,
+        optimizerState,
+      ),
+    [
+      activeAnalysis,
+      clarificationAnswers,
+      optimizerState,
+      selectedInterpretation,
+      verificationReport,
+    ],
+  );
+
+  const confidenceAssessment = confidenceBundle.assessment;
+  const enrichedInterpretations = confidenceBundle.interpretations;
+
   const contextGraph = useMemo(
     () =>
       resolveXService.buildContextGraph(
@@ -436,8 +527,15 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         clarificationAnswers,
         selectedInterpretation,
         optimizerState,
+        confidenceAssessment,
       ),
-    [activeAnalysis, clarificationAnswers, optimizerState, selectedInterpretation],
+    [
+      activeAnalysis,
+      clarificationAnswers,
+      confidenceAssessment,
+      optimizerState,
+      selectedInterpretation,
+    ],
   );
 
   const interpretationDiffs = useMemo(
@@ -456,6 +554,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     }
     setAllowOptionalRefinement(false);
     setFocusedQuestionId(null);
+    setUserConfirmedHighRisk(false);
     setFinalResolution(result.defaultResolution);
 
     setSessionHistory((prev) => {
@@ -467,7 +566,9 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         resolved: result.defaultResolution.verification?.allRequiredPassed ?? false,
         createdAt: result.createdAt,
       };
-      const filtered = prev.filter((item) => item.id !== result.id && item.prompt !== result.prompt);
+      const filtered = prev.filter(
+        (item) => item.id !== result.id && item.prompt !== result.prompt,
+      );
       return [nextItem, ...filtered].slice(0, 15);
     });
   }, []);
@@ -477,6 +578,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       customPrompt?: string,
       customDomain?: DomainContext,
       customStrictness?: StrictnessLevel,
+      options?: { forceSessionMode?: "new" | "continue" },
     ): Promise<AnalysisResult> => {
       if (isAnalyzingRef.current) {
         return activeAnalysis;
@@ -484,6 +586,12 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       const targetPrompt = (customPrompt ?? promptInput).trim();
       const targetDomain = customDomain ?? domain;
       const targetStrictness = customStrictness ?? strictness;
+      const effectiveContinue =
+        options?.forceSessionMode === "continue"
+          ? true
+          : options?.forceSessionMode === "new"
+            ? false
+            : continueInSession;
 
       if (!targetPrompt) {
         const msg = "Please enter an instruction before analyzing.";
@@ -494,49 +602,77 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       isAnalyzingRef.current = true;
       setIsAnalyzing(true);
       setApiError(null);
+      setLiveBackendNotice(null);
       setActiveConversationDetail(null);
 
       try {
-        if (settings.integrationMode === "live") {
-          setAnalysisStage(1);
-          setAnalysisStageLabel(ANALYSIS_STAGES[0]);
-          const contextStr = `Domain: ${targetDomain} | Strictness: ${targetStrictness} | Language: ${language}`;
-          setAnalysisStage(2);
-          setAnalysisStageLabel(ANALYSIS_STAGES[1]);
+        await runSimulatedStageProgress();
 
-          const backendResp = await resolveXService.analyzeWithBackend(
-            targetPrompt,
-            contextStr,
-            settings.apiBaseUrl,
-          );
-          setAnalysisStage(4);
-          setAnalysisStageLabel(ANALYSIS_STAGES[3]);
+        // Maintain strict session boundary: reuse activeSessionId only when effectiveContinue is true
+        const targetSessionId = effectiveContinue ? activeSessionId : `sess-${Date.now()}`;
+        const priorSessionMem = effectiveContinue
+          ? (sessionMemories[activeSessionId] ??
+            createEmptySessionMemory(activeSessionId, targetPrompt.slice(0, 48)))
+          : createEmptySessionMemory(targetSessionId, targetPrompt.slice(0, 48));
+        const nextSessionMem = appendMessageToSessionMemory(priorSessionMem, targetPrompt, "user");
 
-          const uiResult = adaptBackendAnalysisToUi(
-            targetPrompt,
-            backendResp,
-            targetDomain,
-            targetStrictness,
+        if (!effectiveContinue) {
+          setActiveSessionId(targetSessionId);
+        }
+        setSessionMemories((prev) => ({
+          ...prev,
+          [targetSessionId]: nextSessionMem,
+        }));
+
+        const serializedContext = serializeSessionMemoryForContext(nextSessionMem);
+        let result: AnalysisResult;
+
+        if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+          try {
+            const contextStr = serializedContext
+              ? `Domain: ${targetDomain} | Strictness: ${targetStrictness} | Language: ${language} | Prior Session Memory: ${serializedContext}`
+              : `Domain: ${targetDomain} | Strictness: ${targetStrictness} | Language: ${language}`;
+
+            const backendResp = await resolveXService.analyzeWithBackend(
+              targetPrompt,
+              contextStr,
+              settings.apiBaseUrl,
+            );
+            const uiResult = adaptBackendAnalysisToUi(
+              targetPrompt,
+              backendResp,
+              targetDomain,
+              targetStrictness,
+              language,
+            );
+            result = applySessionMemoryToAnalysis(uiResult, nextSessionMem);
+            setLiveBackendNotice(null);
+            void refreshConversationsList();
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "Backend request failed";
+            setLiveBackendNotice(
+              `FastAPI backend (${settings.apiBaseUrl}) unreachable: ${msg}. Showing local Client Simulation (DEMO DATA — NOT live model output).`,
+            );
+            const rawLocal = await resolveXService.analyzePrompt({
+              prompt: targetPrompt,
+              domain: targetDomain,
+              strictness: targetStrictness,
+              language,
+              maxQuestions: settings.maxClarificationQuestions,
+            });
+            result = applySessionMemoryToAnalysis(rawLocal, nextSessionMem);
+          }
+        } else {
+          const rawLocal = await resolveXService.analyzePrompt({
+            prompt: targetPrompt,
+            domain: targetDomain,
+            strictness: targetStrictness,
             language,
-          );
-          applyNewAnalysis(uiResult, true);
-          void refreshConversationsList();
-          return uiResult;
+            maxQuestions: settings.maxClarificationQuestions,
+          });
+          result = applySessionMemoryToAnalysis(rawLocal, nextSessionMem);
         }
 
-        // Explicit Mock Mode fallback
-        for (let i = 0; i < ANALYSIS_STAGES.length; i += 1) {
-          setAnalysisStage(i + 1);
-          setAnalysisStageLabel(ANALYSIS_STAGES[i] ?? "Analyzing...");
-          await new Promise((r) => setTimeout(r, settings.reduceMotion ? 50 : 120));
-        }
-        const result = await resolveXService.analyzePrompt({
-          prompt: targetPrompt,
-          domain: targetDomain,
-          strictness: targetStrictness,
-          language,
-          maxQuestions: settings.maxClarificationQuestions,
-        });
         applyNewAnalysis(result, true);
         return result;
       } catch (err) {
@@ -555,11 +691,15 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     },
     [
       activeAnalysis,
+      activeSessionId,
       applyNewAnalysis,
+      continueInSession,
       domain,
       language,
       promptInput,
       refreshConversationsList,
+      runSimulatedStageProgress,
+      sessionMemories,
       settings.apiBaseUrl,
       settings.integrationMode,
       settings.maxClarificationQuestions,
@@ -574,21 +714,31 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       if (!found) return activeAnalysis;
       setPromptInput(found.prompt);
       setDomain(found.domain);
-      if (settings.integrationMode === "live") {
+      if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
         return runAnalysis(found.prompt, found.domain, strictness);
       }
-      const result = buildPresetAnalysis(found.id, strictness, language);
-      applyNewAnalysis(result, true);
-      return result;
+      setIsAnalyzing(true);
+      try {
+        await runSimulatedStageProgress();
+        const raw = buildPresetAnalysis(found.id, strictness, language);
+        const isolatedId = `sess-${exampleId}-${Date.now()}`;
+        const freshMem = appendMessageToSessionMemory(
+          createEmptySessionMemory(isolatedId, raw.prompt.slice(0, 48)),
+          raw.prompt,
+          "user",
+        );
+        setActiveSessionId(isolatedId);
+        setSessionMemories((prev) => ({ ...prev, [isolatedId]: freshMem }));
+        const result = applySessionMemoryToAnalysis(raw, freshMem);
+        applyNewAnalysis(result, true);
+        return result;
+      } finally {
+        setIsAnalyzing(false);
+        setAnalysisStage(0);
+        setAnalysisStageLabel("");
+      }
     },
-    [
-      activeAnalysis,
-      applyNewAnalysis,
-      language,
-      runAnalysis,
-      settings.integrationMode,
-      strictness,
-    ],
+    [activeAnalysis, applyNewAnalysis, language, runAnalysis, settings.integrationMode, strictness],
   );
 
   const selectMultilingualSample = useCallback(
@@ -598,18 +748,35 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       if (!sample) return activeAnalysis;
       setPromptInput(sample.prompt);
       setDomain(sample.domain);
-      if (settings.integrationMode === "live") {
+      if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
         return runAnalysis(sample.prompt, sample.domain, strictness);
       }
-      const result = analyzeCustomPromptMock(
-        sample.prompt,
-        sample.domain,
-        strictness,
-        settings.maxClarificationQuestions,
-        language,
-      );
-      applyNewAnalysis(result, true);
-      return result;
+      setIsAnalyzing(true);
+      try {
+        await runSimulatedStageProgress();
+        const raw = analyzeCustomPromptMock(
+          sample.prompt,
+          sample.domain,
+          strictness,
+          settings.maxClarificationQuestions,
+          language,
+        );
+        const isolatedId = `sess-ml-${sampleId}-${Date.now()}`;
+        const freshMem = appendMessageToSessionMemory(
+          createEmptySessionMemory(isolatedId, raw.prompt.slice(0, 48)),
+          raw.prompt,
+          "user",
+        );
+        setActiveSessionId(isolatedId);
+        setSessionMemories((prev) => ({ ...prev, [isolatedId]: freshMem }));
+        const result = applySessionMemoryToAnalysis(raw, freshMem);
+        applyNewAnalysis(result, true);
+        return result;
+      } finally {
+        setIsAnalyzing(false);
+        setAnalysisStage(0);
+        setAnalysisStageLabel("");
+      }
     },
     [
       activeAnalysis,
@@ -626,13 +793,10 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     setFocusedQuestionId(questionId);
   }, []);
 
-  const sendScenarioToClarification = useCallback(
-    (interpretationId: string) => {
-      setSelectedInterpretationId(interpretationId);
-      setFocusedQuestionId(null);
-    },
-    [],
-  );
+  const sendScenarioToClarification = useCallback((interpretationId: string) => {
+    setSelectedInterpretationId(interpretationId);
+    setFocusedQuestionId(null);
+  }, []);
 
   const resetInterpretationSimulation = useCallback(() => {
     setSelectedInterpretationId(activeAnalysis.interpretations[0]?.id ?? null);
@@ -651,7 +815,11 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
 
       setApiError(null);
 
-      if (settings.integrationMode === "live" && !activeAnalysis.isDemoData && activeAnalysis.backendData) {
+      if (
+        settings.integrationMode === "live" &&
+        !activeAnalysis.isDemoData &&
+        activeAnalysis.backendData
+      ) {
         setIsSubmittingClarification(true);
         try {
           const question = activeAnalysis.clarificationQuestions.find((q) => q.id === questionId);
@@ -743,9 +911,45 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         ];
       });
       setFocusedQuestionId(null);
+
+      // Persist clarified entities into active session memory strictly within activeSessionId
+      setSessionMemories((prev) => {
+        const curr =
+          prev[activeSessionId] ??
+          createEmptySessionMemory(activeSessionId, activeAnalysis.prompt.slice(0, 48));
+        const updated = appendMessageToSessionMemory(curr, trimmedValue, "clarification");
+        return { ...prev, [activeSessionId]: updated };
+      });
+
+      // When connected to live FastAPI backend, synchronize clarification turn & real confidence history
+      if (settings.integrationMode === "fastapi-ready" && activeAnalysis.backendConversationId) {
+        void resolveXService
+          .clarifyBackendTurn(
+            settings.apiBaseUrl,
+            activeAnalysis.backendConversationId,
+            trimmedValue,
+            activeAnalysis.prompt,
+            activeAnalysis.domain,
+            activeAnalysis.strictness,
+            activeAnalysis,
+          )
+          .then(({ analysis: updated }) => {
+            setActiveAnalysis((curr) =>
+              curr.backendConversationId === updated.backendConversationId ? updated : curr,
+            );
+            setLiveBackendNotice(null);
+          })
+          .catch((err) => {
+            const msg = err instanceof Error ? err.message : "Backend clarification sync failed";
+            setLiveBackendNotice(
+              `FastAPI clarification sync unavailable (${msg}). Using local client simulation.`,
+            );
+          });
+      }
     },
     [
       activeAnalysis,
+      activeSessionId,
       allowOptionalRefinement,
       applyNewAnalysis,
       clarificationAnswers,
@@ -785,7 +989,11 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   }, [activeAnalysis.defaultResolution]);
 
   const generateFinalResolution = useCallback(async (): Promise<FinalResolution> => {
-    if (settings.integrationMode === "live" && !activeAnalysis.isDemoData && activeAnalysis.backendData) {
+    if (
+      (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") &&
+      activeAnalysis.backendData &&
+      !activeAnalysis.isDemoData
+    ) {
       if (activeAnalysis.backendData.status === "RESOLVED") {
         try {
           const confirmed = await resolveXService.resolveWithBackend(
@@ -845,42 +1053,59 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
 
   const loadHistorySession = useCallback(
     async (item: SessionHistoryItem) => {
-      if (settings.integrationMode === "live") {
-        try {
-          const detail = await resolveXService.getConversationDetail(item.id, settings.apiBaseUrl);
-          setActiveConversationDetail(detail);
-          const syntheticResp = {
-            conversation_id: detail.conversation.id,
-            status: detail.conversation.status,
-            classification: detail.conversation.classification ?? null,
-            ambiguity_types: [],
-            needs_clarification: detail.conversation.status === "NEEDS_CLARIFICATION",
-            interpretations: [],
-            missing_required_info: [],
-            clarification_questions: detail.clarification_questions
-              .filter((q) => !q.answered)
-              .map((q) => q.question_text),
-            resolved_intent: detail.resolved_intent ?? null,
-            inventory_insight: null,
-            turn_count: detail.conversation.turn_count,
-          };
-          const ui = adaptBackendAnalysisToUi(
-            detail.conversation.original_instruction,
-            syntheticResp,
-            item.domain,
-            strictness,
-            language,
-          );
-          applyNewAnalysis(ui, true);
-          return;
-        } catch {
-          // If not found in backend DB, re-analyze prompt cleanly
+      const isolatedId = `sess-hist-${Date.now()}`;
+      setActiveSessionId(isolatedId);
+      setSessionMemories((prev) => ({
+        ...prev,
+        [isolatedId]: createEmptySessionMemory(isolatedId, item.prompt.slice(0, 48)),
+      }));
+      const prevMode = continueInSession;
+      setContinueInSession(false);
+
+      try {
+        if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+          try {
+            const detail = await resolveXService.getConversationDetail(
+              item.id,
+              settings.apiBaseUrl,
+            );
+            setActiveConversationDetail(detail);
+            const syntheticResp = {
+              conversation_id: detail.conversation.id,
+              status: detail.conversation.status,
+              classification: detail.conversation.classification ?? null,
+              ambiguity_types: [],
+              needs_clarification: detail.conversation.status === "NEEDS_CLARIFICATION",
+              interpretations: [],
+              missing_required_info: [],
+              clarification_questions: detail.clarification_questions
+                .filter((q) => !q.answered)
+                .map((q) => q.question_text),
+              resolved_intent: detail.resolved_intent ?? null,
+              inventory_insight: null,
+              turn_count: detail.conversation.turn_count,
+            };
+            const ui = adaptBackendAnalysisToUi(
+              detail.conversation.original_instruction,
+              syntheticResp,
+              item.domain,
+              strictness,
+              language,
+            );
+            applyNewAnalysis(ui, true);
+            return;
+          } catch {
+            // If not found in backend DB, re-analyze prompt cleanly
+          }
         }
+        await runAnalysis(item.prompt, item.domain, strictness);
+      } finally {
+        setContinueInSession(prevMode);
       }
-      await runAnalysis(item.prompt, item.domain, strictness);
     },
     [
       applyNewAnalysis,
+      continueInSession,
       language,
       runAnalysis,
       settings.apiBaseUrl,
@@ -892,6 +1117,68 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   const clearHistory = useCallback(() => {
     setSessionHistory([]);
   }, []);
+
+  // --- Context Memory Session Handlers ---
+  const startNewIsolatedSession = useCallback(() => {
+    const newId = `sess-${Date.now()}`;
+    const emptyMem = createEmptySessionMemory(newId, "Fresh Isolated Session");
+    setActiveSessionId(newId);
+    setSessionMemories((prev) => ({ ...prev, [newId]: emptyMem }));
+    setClarificationAnswers([]);
+    setAllowOptionalRefinement(false);
+    setFocusedQuestionId(null);
+    setPromptInput("");
+    setActiveAnalysis((curr) => ({ ...curr, contextMemory: emptyMem }));
+  }, []);
+
+  const syncEditedMemoryToActiveAnalysis = useCallback(
+    (nextMem: SessionContextMemory) => {
+      setSessionMemories((prev) => ({ ...prev, [activeSessionId]: nextMem }));
+      setActiveAnalysis((curr) => applySessionMemoryToAnalysis(curr, nextMem));
+    },
+    [activeSessionId],
+  );
+
+  const updateMemoryEntity = useCallback(
+    (entityId: string, newValue: string) => {
+      const cleaned = newValue.trim();
+      if (!cleaned) return;
+      const currMem =
+        sessionMemories[activeSessionId] ??
+        createEmptySessionMemory(activeSessionId, activeAnalysis.prompt.slice(0, 48));
+      const updatedEntities = currMem.entities.map((ent) =>
+        ent.id === entityId
+          ? { ...ent, value: cleaned, sourceRole: "edited" as const, editedByUser: true }
+          : ent,
+      );
+      const recomputed = recomputeMemoryReferencesForPrompt(
+        { ...currMem, entities: updatedEntities, editedAt: new Date().toISOString() },
+        activeAnalysis.prompt,
+      );
+      syncEditedMemoryToActiveAnalysis(recomputed);
+    },
+    [activeAnalysis.prompt, activeSessionId, sessionMemories, syncEditedMemoryToActiveAnalysis],
+  );
+
+  const deleteMemoryEntity = useCallback(
+    (entityId: string) => {
+      const currMem =
+        sessionMemories[activeSessionId] ??
+        createEmptySessionMemory(activeSessionId, activeAnalysis.prompt.slice(0, 48));
+      const updatedEntities = currMem.entities.filter((ent) => ent.id !== entityId);
+      const recomputed = recomputeMemoryReferencesForPrompt(
+        { ...currMem, entities: updatedEntities, editedAt: new Date().toISOString() },
+        activeAnalysis.prompt,
+      );
+      syncEditedMemoryToActiveAnalysis(recomputed);
+    },
+    [activeAnalysis.prompt, activeSessionId, sessionMemories, syncEditedMemoryToActiveAnalysis],
+  );
+
+  const clearCurrentSessionMemory = useCallback(() => {
+    const emptyMem = createEmptySessionMemory(activeSessionId, activeAnalysis.prompt.slice(0, 48));
+    syncEditedMemoryToActiveAnalysis(emptyMem);
+  }, [activeAnalysis.prompt, activeSessionId, syncEditedMemoryToActiveAnalysis]);
 
   // --- PS2 Real Backend Mutations ---
 
@@ -1049,18 +1336,69 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       };
       setAssistantMessages((prev) => [...prev, userMsg]);
 
-      if (settings.integrationMode !== "live") {
-        const mockMsg: AssistantMessage = {
-          id: `a-${Date.now() + 1}`,
-          sender: "assistant",
-          text: "Switch Execution Mode to Live Backend in Settings to query Gemini + SQLite inventory intelligence.",
-          domainTag: "Unified",
-          suggestedRoute: "/settings",
-          suggestedLabel: "Open Settings",
-          timestamp: nowLabel,
-        };
-        setAssistantMessages((prev) => [...prev, mockMsg]);
-        return;
+      let replyText = "";
+      let domainTag: AssistantMessage["domainTag"] = "Unified";
+      let suggestedRoute: string | undefined;
+      let suggestedLabel: string | undefined;
+
+      if (/\b(shortage|stock|sku|mcu|sensor|warehouse|inventory)\b/i.test(lower)) {
+        domainTag = "PS2 Inventory";
+        const shortages = materials.filter((m) => m.health !== "Healthy");
+        replyText = `${shortages.length} materials need attention: ${shortages
+          .map((m) => `${m.sku} (${m.available} avail vs ${m.safetyStock} safety — ${m.health})`)
+          .join("; ")}.`;
+        suggestedRoute = "/inventory";
+        suggestedLabel = "Inspect Materials & Shortages";
+      } else if (/\b(crd|order|delay|tata|reliance|fulfillment)\b/i.test(lower)) {
+        domainTag = "PS2 Inventory";
+        const atRisk = orders.filter((o) => o.crdRisk !== "On Track");
+        replyText = `${atRisk.length} customer orders have CRD risk: ${atRisk
+          .map(
+            (o) =>
+              `${o.orderNumber} (${o.customer}, ${o.daysUntilCrd}d to CRD, ${o.fulfillmentPct}% filled — ${o.crdRisk})`,
+          )
+          .join("; ")}.`;
+        suggestedRoute = "/inventory";
+        suggestedLabel = "Open CRD Risk Monitor";
+      } else if (/\b(approval|po|purchase|recommend|supplier)\b/i.test(lower)) {
+        domainTag = "PS2 Inventory";
+        const pending = approvals.filter((a) => a.status === "Pending");
+        replyText = `${pending.length} approval requests are pending (${pending
+          .map((p) => `${p.sku} $${p.amountUsd.toLocaleString()}`)
+          .join(
+            ", ",
+          )}), and ${recommendations.filter((r) => r.status === "Suggested").length} PO recommendations are ready to draft.`;
+        suggestedRoute = "/inventory";
+        suggestedLabel = "Review PO Approvals";
+      } else if (/\b(confiden|abstain|uncertain|evidence|history|contradict)\b/i.test(lower)) {
+        domainTag = "PS6 Language";
+        const scoreLabel = confidenceAssessment.abstained
+          ? "Abstained (Insufficient / Conflicting Evidence)"
+          : `${Math.round((confidenceAssessment.confidenceScore ?? 0) * 100)}% (${confidenceAssessment.confidenceBand})`;
+        replyText = `Confidence: ${scoreLabel} | Verified Correctness: ${confidenceAssessment.verifiedCorrectness} | Provenance: ${confidenceAssessment.isLiveBackend ? "Live FastAPI Backend" : "Client Simulation (Not Model Output)"}. Supporting: ${confidenceAssessment.supportingEvidence.length}, Contradicting: ${confidenceAssessment.contradictingEvidence.length}.`;
+        suggestedRoute = "/resolution";
+        suggestedLabel = "Open Confidence & Verification Audit";
+      } else if (/\b(verify|verification|missing|complete)\b/i.test(lower)) {
+        domainTag = "PS6 Language";
+        replyText = `Verification status is "${verificationReport.status}" (${verificationReport.completenessScore}% complete): ${verificationReport.completenessExplanation}`;
+        suggestedRoute = verificationReport.allRequiredPassed ? "/resolution" : "/clarification";
+        suggestedLabel = verificationReport.allRequiredPassed
+          ? "Open Final Resolution"
+          : "Fix in Clarification";
+      } else if (
+        /\b(graph|node|ambigu|span|why|interpret|what-if|language|kannada|hindi)\b/i.test(lower)
+      ) {
+        domainTag = "PS6 Language";
+        replyText = `Active prompt (${activeAnalysis.multilingual.detectedLanguage}) has ${activeAnalysis.spans.length} ambiguity spans (${activeAnalysis.ambiguityScore}% ambiguity). Highest-priority unresolved question targets "${optimizerState.activeQuestion?.targetToken ?? "none"}".`;
+        suggestedRoute = "/visualization";
+        suggestedLabel = "View Context Graph";
+      } else {
+        domainTag = "Unified";
+        const shortagesCount = materials.filter((m) => m.health === "Shortage").length;
+        const atRiskOrders = orders.filter((o) => o.crdRisk !== "On Track").length;
+        replyText = `Unified Snapshot (${activeRole}): PS6 prompt is ${verificationReport.completenessScore}% verified (${activeAnalysis.spans.length} spans, ${uiLanguage} UI). PS2 tracks ${shortagesCount} critical SKU shortages and ${atRiskOrders} CRD-at-risk orders.`;
+        suggestedRoute = "/evaluation";
+        suggestedLabel = "View Unified Analytics";
       }
 
       setIsAssistantLoading(true);
@@ -1097,8 +1435,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
             "Could you clarify your request so ResolveX can proceed?";
         } else if (resp.resolved_intent) {
           replyText =
-            resp.resolved_intent.direct_answer ||
-            resp.resolved_intent.resolved_instruction;
+            resp.resolved_intent.direct_answer || resp.resolved_intent.resolved_instruction;
         } else {
           replyText = `Status: ${resp.status}`;
         }
@@ -1112,7 +1449,11 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
           clarificationQuestions: resp.clarification_questions,
           interpretations: resp.interpretations,
           inventoryInsight: resp.inventory_insight ?? null,
-          suggestedRoute: isInventory ? "/inventory" : resp.status === "RESOLVED" ? "/resolution" : "/clarification",
+          suggestedRoute: isInventory
+            ? "/inventory"
+            : resp.status === "RESOLVED"
+              ? "/resolution"
+              : "/clarification",
           suggestedLabel: isInventory
             ? "Open Inventory Hub"
             : resp.status === "RESOLVED"
@@ -1146,10 +1487,18 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     },
     [
       activeRole,
+      approvals,
       assistantConversationId,
+      confidenceAssessment,
       isAssistantLoading,
+      materials,
+      optimizerState.activeQuestion?.targetToken,
+      orders,
+      recommendations,
       settings.apiBaseUrl,
       settings.integrationMode,
+      uiLanguage,
+      verificationReport,
     ],
   );
 
@@ -1165,49 +1514,79 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const effectiveFinalResolution = useMemo<FinalResolution>(() => {
-    if (!activeAnalysis.isDemoData && activeAnalysis.backendData) {
-      return activeAnalysis.defaultResolution;
+    let resolvedBase = finalResolution;
+    if (
+      !activeAnalysis.isDemoData &&
+      activeAnalysis.backendData &&
+      clarificationAnswers.length === 0
+    ) {
+      resolvedBase = activeAnalysis.defaultResolution;
+    } else if (clarificationAnswers.length > 0) {
+      const base = computeResolutionFromInputs(
+        activeAnalysis.prompt,
+        activeAnalysis.spans,
+        selectedInterpretation,
+        clarificationAnswers,
+        activeAnalysis.domain,
+        activeAnalysis.clarificationQuestions,
+        activeAnalysis.contextMemory,
+      );
+      const remainingAmbiguityScore = optimizerState.remainingAmbiguityScore;
+      const clarityGain = Math.max(
+        0,
+        optimizerState.currentClarityScore - activeAnalysis.clarityScore,
+      );
+      resolvedBase = {
+        ...base,
+        clarityGain,
+        remainingAmbiguityScore,
+        structuredSpec: {
+          ...base.structuredSpec,
+          confidenceAfterClarification: 100 - remainingAmbiguityScore,
+        },
+        optimizationSummary: {
+          turnsTaken: optimizerState.conversationHistory.length,
+          totalQuestionsAvailable: activeAnalysis.clarificationQuestions.length,
+          skippedOptionalCount: optimizerState.skippedOptionalCount,
+          stoppedEarly:
+            optimizerState.isSufficientlyClear && optimizerState.skippedOptionalCount > 0,
+          stopReason: optimizerState.stopReason,
+          essentialFields: optimizerState.essentialFields,
+        },
+        verification: verificationReport,
+        riskAssessment,
+      };
     }
-    if (clarificationAnswers.length === 0) {
-      return finalResolution;
-    }
-    const base = computeResolutionFromInputs(
-      activeAnalysis.prompt,
-      activeAnalysis.spans,
-      selectedInterpretation,
+
+    // Feature 10: Chronological Explainable Decision Timeline
+    const decisionTimeline = generateDecisionTimeline({
+      analysis: activeAnalysis,
       clarificationAnswers,
-      activeAnalysis.domain,
-      activeAnalysis.clarificationQuestions,
-    );
-    const remainingAmbiguityScore = optimizerState.remainingAmbiguityScore;
-    const clarityGain = Math.max(
-      0,
-      optimizerState.currentClarityScore - activeAnalysis.clarityScore,
-    );
+      optimizerState,
+      selectedInterpretation,
+      confidenceAssessment,
+      riskAssessment,
+      verificationReport,
+      contextMemory: activeAnalysis.contextMemory,
+      finalResolution: resolvedBase,
+      userConfirmedHighRisk,
+    });
+
     return {
-      ...base,
-      clarityGain,
-      remainingAmbiguityScore,
-      structuredSpec: {
-        ...base.structuredSpec,
-        confidenceAfterClarification: 100 - remainingAmbiguityScore,
-      },
-      optimizationSummary: {
-        turnsTaken: optimizerState.conversationHistory.length,
-        totalQuestionsAvailable: activeAnalysis.clarificationQuestions.length,
-        skippedOptionalCount: optimizerState.skippedOptionalCount,
-        stoppedEarly: optimizerState.isSufficientlyClear && optimizerState.skippedOptionalCount > 0,
-        stopReason: optimizerState.stopReason,
-        essentialFields: optimizerState.essentialFields,
-      },
+      ...resolvedBase,
       verification: verificationReport,
+      riskAssessment,
+      decisionTimeline,
     };
   }, [
     activeAnalysis,
     clarificationAnswers,
+    confidenceAssessment,
     finalResolution,
     optimizerState,
+    riskAssessment,
     selectedInterpretation,
+    userConfirmedHighRisk,
     verificationReport,
   ]);
 
@@ -1240,6 +1619,9 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     clarificationAnswers,
     optimizerState,
     verificationReport,
+    confidenceAssessment,
+    enrichedInterpretations,
+    liveBackendNotice,
     contextGraph,
     focusedQuestionId,
     focusClarificationQuestion,
@@ -1257,6 +1639,17 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     generateFinalResolution,
     loadHistorySession,
     clearHistory,
+    activeSessionId,
+    sessionMemory,
+    continueInSession,
+    setContinueInSession,
+    startNewIsolatedSession,
+    updateMemoryEntity,
+    deleteMemoryEntity,
+    clearCurrentSessionMemory,
+    riskAssessment,
+    userConfirmedHighRisk,
+    setUserConfirmedHighRisk,
     activeRole,
     setActiveRole,
     isLoadingInventory,

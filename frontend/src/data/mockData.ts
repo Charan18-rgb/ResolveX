@@ -7,6 +7,7 @@ import type {
   ClarificationAnswer,
   ClarificationOptimizerState,
   ClarificationQuestion,
+  ConfidenceAssessment,
   ContextGraphEdge,
   ContextGraphNode,
   ContextIntelligenceGraphData,
@@ -24,6 +25,7 @@ import type {
   ResolutionVerificationReport,
   RiskLevel,
   ScenarioDimensionDiff,
+  SessionContextMemory,
   StrictnessLevel,
 } from "@/types/resolvex";
 import { ENV_CONFIG } from "@/config/env";
@@ -48,10 +50,12 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 
 export const CLASSIC_QUICK_PROMPTS: string[] = [
   "Send the report to Rahul tomorrow.",
+  "Review Q3_Finance_Report.pdf and Budget_2026.xlsx with Rahul Sharma tomorrow.",
+  "Email him the second one next week.",
   "Book a table for tomorrow evening.",
   "Move the meeting to Friday.",
-  "Give Alex the latest version.",
-  "Transfer the files to the other folder.",
+  "Fix that thing on it soon before they notice.",
+  "Deploy to staging only and roll out to production immediately next week.",
   "Prioritize remaining MCU stock for the Bengaluru line and expedite the rest soon.",
 ];
 
@@ -81,6 +85,23 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     domain: "Enterprise Support",
     prompt: "Restrict access for inactive accounts and notify the team if anything looks unusual.",
     previewAmbiguity: 88,
+  },
+  {
+    id: "ex-insufficient-evidence",
+    title: "Insufficient Evidence (Abstain Test)",
+    tag: "Abstention Guard",
+    domain: "General",
+    prompt: "Fix that thing on it soon before they notice.",
+    previewAmbiguity: 91,
+  },
+  {
+    id: "ex-contradictory-ops",
+    title: "Contradictory Directives (Conflict Test)",
+    tag: "Contradiction Guard",
+    domain: "Software Engineering",
+    prompt:
+      "Deploy to staging only and roll out to production immediately next week while keeping sessions active and suspended.",
+    previewAmbiguity: 94,
   },
 ];
 
@@ -148,6 +169,19 @@ export function buildPresetAnalysis(
   requestedLanguage: LanguageOption = "Auto Detect",
 ): AnalysisResult {
   const now = new Date().toISOString();
+
+  if (exampleId === "ex-insufficient-evidence" || exampleId === "ex-contradictory-ops") {
+    const matched = EXAMPLE_PROMPTS.find((e) => e.id === exampleId);
+    if (matched) {
+      return analyzeCustomPromptMock(
+        matched.prompt,
+        matched.domain,
+        strictness,
+        4,
+        requestedLanguage,
+      );
+    }
+  }
 
   if (exampleId === "ex-deploy-fast") {
     const prompt = EXAMPLE_PROMPTS[0]!.prompt;
@@ -1432,9 +1466,12 @@ export function analyzeCustomPromptMock(
 ): AnalysisResult {
   const trimmed = promptText.trim();
 
-  // Match exact English preset if user clicked or pasted an example prompt
+  // Match hardcoded rich English presets if user clicked or pasted them
   const matchedPreset = EXAMPLE_PROMPTS.find(
-    (ex) => ex.prompt.toLowerCase() === trimmed.toLowerCase(),
+    (ex) =>
+      ex.prompt.toLowerCase() === trimmed.toLowerCase() &&
+      ex.id !== "ex-insufficient-evidence" &&
+      ex.id !== "ex-contradictory-ops",
   );
   if (matchedPreset) {
     return buildPresetAnalysis(matchedPreset.id, strictness, requestedLanguage);
@@ -2372,21 +2409,31 @@ export function computeResolutionFromInputs(
   answers: ClarificationAnswer[],
   domain: DomainContext,
   clarificationQuestions: ClarificationQuestion[] = [],
+  contextMemory?: SessionContextMemory,
 ): FinalResolution {
   const validAnswers = answers.filter((a) => a.resolvedValue.trim().length > 0);
-  const decisionList = validAnswers.map((ans, idx) => {
-    const matchedQuestion = clarificationQuestions.find((q) => q.id === ans.questionId);
-    const matchingSpan = matchedQuestion
-      ? spans.find((s) => s.id === matchedQuestion.targetSpanId)
-      : spans[idx];
-    return {
-      token: ans.targetToken ?? matchingSpan?.token ?? `Parameter ${idx + 1}`,
-      decision: ans.resolvedValue.trim(),
-      essentialField: ans.essentialField ?? matchedQuestion?.essentialField,
-      selectionExplanation: ans.selectionExplanation ?? matchedQuestion?.selectionExplanation,
-      ambiguityReduction: ans.ambiguityReduction ?? matchedQuestion?.estimatedClarityGain,
-    };
-  });
+  const decisionList = [
+    ...(contextMemory?.resolvedReferences.map((ref) => ({
+      token: ref.referenceToken,
+      decision: `${ref.resolvedValue ?? ""} (From Turn ${ref.sourceTurn ?? 1} Session Memory)`,
+      essentialField: "Target Entity" as const,
+      selectionExplanation: ref.explanation,
+      ambiguityReduction: 24,
+    })) ?? []),
+    ...validAnswers.map((ans, idx) => {
+      const matchedQuestion = clarificationQuestions.find((q) => q.id === ans.questionId);
+      const matchingSpan = matchedQuestion
+        ? spans.find((s) => s.id === matchedQuestion.targetSpanId)
+        : spans[idx];
+      return {
+        token: ans.targetToken ?? matchingSpan?.token ?? `Parameter ${idx + 1}`,
+        decision: ans.resolvedValue.trim(),
+        essentialField: ans.essentialField ?? matchedQuestion?.essentialField,
+        selectionExplanation: ans.selectionExplanation ?? matchedQuestion?.selectionExplanation,
+        ambiguityReduction: ans.ambiguityReduction ?? matchedQuestion?.estimatedClarityGain,
+      };
+    }),
+  ];
 
   const intentLabel = selectedInterpretation
     ? selectedInterpretation.title
@@ -2410,6 +2457,16 @@ export function computeResolutionFromInputs(
   const remainingAmbiguityScore = Math.max(5, Math.round(42 - answeredRatio * 34));
   const clarityGain = Math.min(90, Math.max(24, Math.round(32 + answeredRatio * 48)));
 
+  const memoryPerson = contextMemory?.resolvedReferences.find(
+    (r) => r.category === "person" && r.resolvedValue,
+  )?.resolvedValue;
+  const memoryObject = contextMemory?.resolvedReferences.find(
+    (r) => (r.category === "object" || r.category === "ordinal") && r.resolvedValue,
+  )?.resolvedValue;
+  const memoryDate = contextMemory?.resolvedReferences.find(
+    (r) => r.category === "date" && r.resolvedValue,
+  )?.resolvedValue;
+
   return {
     originalPrompt,
     resolvedPrompt: resolvedPromptParts.join(" "),
@@ -2417,12 +2474,14 @@ export function computeResolutionFromInputs(
     remainingAmbiguityScore,
     structuredSpec: {
       intentType: intentLabel,
-      primarySubject: domain,
-      targetScope: selectedInterpretation?.impactScope ?? `${domain} Active Scope`,
+      primarySubject: memoryPerson ? `${memoryPerson} (${domain})` : domain,
+      targetScope: memoryObject ?? selectedInterpretation?.impactScope ?? `${domain} Active Scope`,
       constraints,
       timeHorizon:
+        memoryDate ??
         decisionList.find((d) => /utc|immediate|window|day|minute|quarter|hour/i.test(d.decision))
-          ?.decision ?? "Explicit execution window verified",
+          ?.decision ??
+        "Explicit execution window verified",
       outputFormat: "Structured Intent JSON + Verified Action Plan",
       confidenceAfterClarification: 100 - remainingAmbiguityScore,
     },
@@ -2610,6 +2669,7 @@ export function buildContextIntelligenceGraph(
   answers: ClarificationAnswer[],
   selectedInterpretation: Interpretation | null,
   optimizerState: ClarificationOptimizerState,
+  confidenceAssessment?: ConfidenceAssessment,
 ): ContextIntelligenceGraphData {
   const validAnswers = answers.filter((a) => a.resolvedValue.trim().length > 0);
   const answerByQuestionId = new Map(validAnswers.map((a) => [a.questionId, a]));
@@ -2631,6 +2691,48 @@ export function buildContextIntelligenceGraph(
         meaning: `Clarified: ${answer.resolvedValue}`,
         uncertaintyScore: 7,
         uncertaintyReason: `Resolved via clarification turn (${answer.source === "custom" ? "custom input" : "predefined option"}).`,
+      };
+    }
+
+    // Sync with Session Context Memory coreferences & reference conflicts
+    const matchedMemResolved = analysis.contextMemory?.resolvedReferences.find(
+      (r) =>
+        (span &&
+          (r.referenceToken.toLowerCase() === span.token.toLowerCase() ||
+            span.token.toLowerCase().includes(r.referenceToken.toLowerCase()))) ||
+        (node.kind === "ambiguous_reference" && r.status === "resolved") ||
+        (node.kind === "person" && node.id !== "n-actor" && r.category === "person") ||
+        (node.kind === "object" && (r.category === "object" || r.category === "ordinal")) ||
+        (node.kind === "date" && r.category === "date"),
+    );
+    if (matchedMemResolved?.resolvedValue) {
+      return {
+        ...node,
+        state: "resolved",
+        resolvedValue: matchedMemResolved.resolvedValue,
+        meaning: `Resolved from Turn ${matchedMemResolved.sourceTurn ?? 1} Memory: ${matchedMemResolved.resolvedValue}`,
+        uncertaintyScore: 14,
+        uncertaintyReason: matchedMemResolved.explanation,
+      };
+    }
+
+    const matchedMemConflict = analysis.contextMemory?.referenceConflicts.find(
+      (c) =>
+        (span && span.token.toLowerCase() === c.referenceToken.toLowerCase()) ||
+        (node.kind === "ambiguous_reference" && c.status !== "resolved") ||
+        (node.kind === "person" && node.id !== "n-actor" && c.category === "person"),
+    );
+    if (matchedMemConflict) {
+      return {
+        ...node,
+        state: "ambiguous",
+        meaning: `Memory Conflict (${matchedMemConflict.referenceToken}): ${matchedMemConflict.explanation}`,
+        uncertaintyScore: 92,
+        uncertaintyReason: matchedMemConflict.explanation,
+        interpretations:
+          matchedMemConflict.candidates.length > 0
+            ? matchedMemConflict.candidates
+            : node.interpretations,
       };
     }
 
@@ -3132,7 +3234,60 @@ export function buildContextIntelligenceGraph(
     ];
   }
 
-  const resolvedNodes = baseNodes.map(resolveNodeDynamics);
+  const resolvedNodesBase = baseNodes.map(resolveNodeDynamics);
+  const resolvedNodes: ContextGraphNode[] = resolvedNodesBase.map((node) => {
+    const tokenLower = node.label.toLowerCase();
+    const supportingEvidence = confidenceAssessment?.supportingEvidence
+      .filter(
+        (ev) =>
+          node.state === "resolved" ||
+          ev.label.toLowerCase().includes(tokenLower) ||
+          ev.detail.toLowerCase().includes(tokenLower),
+      )
+      .slice(0, 3)
+      .map((ev) => `${ev.label}: ${ev.detail}`);
+
+    const contradictingEvidence = confidenceAssessment?.contradictingEvidence
+      .filter(
+        (ev) =>
+          node.state !== "resolved" ||
+          ev.category === "Directive Conflict" ||
+          ev.category === "Verification Contradiction" ||
+          ev.label.toLowerCase().includes(tokenLower),
+      )
+      .slice(0, 3)
+      .map((ev) => `${ev.label}: ${ev.detail}`);
+
+    const isAbstained = Boolean(confidenceAssessment?.abstained && node.state !== "resolved");
+    const nodeVerified =
+      node.state === "resolved" && confidenceAssessment?.verifiedCorrectness !== "contradictory"
+        ? "verified"
+        : contradictingEvidence && contradictingEvidence.length > 0 && node.state !== "resolved"
+          ? "contradictory"
+          : (confidenceAssessment?.verifiedCorrectness ?? "unverified");
+
+    // Risk-aware status flag for nodes in high-impact dimensions
+    const isHighRiskNode =
+      analysis.riskAssessment?.riskFactors.some(
+        (f) =>
+          f.level === "High" &&
+          (node.kind === "action" ||
+            node.label.toLowerCase().includes(f.targetToken ?? "") ||
+            tokenLower.includes(f.dimension.split("_")[0] ?? "")),
+      ) ||
+      (node.kind === "action" &&
+        (analysis.riskAssessment?.riskLevel === "High" || analysis.riskLevel === "High"));
+
+    return {
+      ...node,
+      supportingEvidence: supportingEvidence ?? [],
+      contradictingEvidence: contradictingEvidence ?? [],
+      verifiedCorrectness: nodeVerified,
+      abstained: isAbstained,
+      riskLevel: isHighRiskNode ? ("High" as RiskLevel) : undefined,
+    };
+  });
+
   const nodeStateMap = new Map(resolvedNodes.map((n) => [n.id, n.state]));
 
   const edges: ContextGraphEdge[] = baseEdges.map((edge) => {
@@ -3150,6 +3305,8 @@ export function buildContextIntelligenceGraph(
   const ambiguousCount = resolvedNodes.filter((n) => n.state === "ambiguous").length;
   const unresolvedCount = resolvedNodes.filter((n) => n.state === "unresolved").length;
   const resolvedCount = resolvedNodes.filter((n) => n.state === "resolved").length;
+  const contradictoryCount = confidenceAssessment?.contradictingEvidence.length ?? 0;
+  const missingContextCount = confidenceAssessment?.missingContext.length ?? 0;
   const averageUncertainty =
     resolvedNodes.length > 0
       ? Math.round(
@@ -3167,6 +3324,8 @@ export function buildContextIntelligenceGraph(
       resolvedCount,
       averageUncertainty,
       activeInterpretationTitle: activeInterpTitle,
+      contradictoryCount,
+      missingContextCount,
     },
   };
 }
