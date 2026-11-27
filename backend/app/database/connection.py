@@ -112,6 +112,10 @@ def init_db(db_path: str) -> None:
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.executescript(SCHEMA_SQL)
 
+    from app.database.migrations import run_migrations
+
+    run_migrations(db_path)
+
 
 def check_db_connection(db_path: str) -> bool:
     """Verify SQLite connectivity with a lightweight query."""
