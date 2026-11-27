@@ -84,6 +84,34 @@ def test_followup_send_still_draft_only(tmp_path, monkeypatch):
     assert "NOT been sent" in second["data"]["delivery_note"]
 
 
+def test_classmate_recipient_extracted(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        card = _query(client, "email my classmate Charan that i am not attending tomorrow's class")
+    assert card["card_type"] == "message_draft"
+    data = card["data"]
+    assert data.get("recipient") == "Charan" or "Charan" in str(data.get("recipient", ""))
+    assert data["delivery_status"] == "DRAFT_ONLY"
+
+
+def test_possessive_relationship_requires_clarification(tmp_path, monkeypatch):
+    """'Email Charan's classmate...' — recipient is the unnamed classmate, not Charan."""
+    with _client(tmp_path, monkeypatch) as client:
+        card = _query(client, "Email Charan's classmate that I will be absent tomorrow.")
+    assert card["card_type"] == "message_draft"
+    # either clarification requested or recipient is not plain "Charan"
+    assert card["data"].get("requires_clarification") or card["data"].get("recipient") != "Charan"
+
+
+def test_pronoun_followup_updates_same_draft(tmp_path, monkeypatch):
+    with _client(tmp_path, monkeypatch) as client:
+        first = _query(client, "Email Charan Kumar that I will not attend college tomorrow.")
+        ctx = {"last_message_draft": first["data"]}
+        second = _query(client, "Tell him I will share the notes later.", context=ctx)
+    assert second["card_type"] == "message_draft"
+    assert second["data"]["recipient"] == "Charan Kumar"
+    assert "notes" in second["data"].get("raw_body", second["data"].get("body", "")).lower()
+
+
 def test_shipping_request_not_hijacked_by_comms(tmp_path, monkeypatch):
     """'Send the material to Ravi.' has no messaging keywords → falls through to
     the language pipeline (help card), preserving PS6 ambiguity handling."""

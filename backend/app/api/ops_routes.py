@@ -257,13 +257,29 @@ def _build_draft(recipient: str, body: str, tone: str = "standard") -> dict[str,
     }
 
 
-def _message_draft_card(question: str, context: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Handle communication requests and follow-up edits to a previous draft."""
+def _message_draft_card(question: str, context: Optional[dict[str, Any]], settings: Settings) -> dict[str, Any]:
+    """Handle communication requests and follow-up edits via structured NLU."""
+    from app.core.communication_parser import parse_communication
+
     last = (context or {}).get("last_message_draft") if context else None
     ql = question.lower()
 
-    # Follow-up edit of an existing draft
-    if last and _first_match(ql, _FOLLOWUP_PATTERNS):
+    # Follow-up edit of an existing draft (tone, send request, pronoun message, name change)
+    if last and (_first_match(ql, _FOLLOWUP_PATTERNS) or _first_match(ql, ["tell ", "say ", "change his name", "change her name", "change the name", "his name", "her name"])):
+        # "Change his/her name to X" — update recipient only
+        name_change = __import__("re").search(r"change (?:his|her|the|recipient'?s?) name to ([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)", question)
+        if name_change:
+            new_name = name_change.group(1).strip()
+            draft = dict(last)
+            draft["recipient"] = new_name
+            draft["recipient_confirmed"] = len(new_name.split()) > 1
+            draft["delivery_status"] = "DRAFT_ONLY"
+            return {
+                "card_type": "message_draft",
+                "title": f"Message Draft — {new_name}",
+                "summary": f"Recipient updated to {new_name}. Still a draft — nothing has been sent.",
+                "data": draft,
+            }
         tone = "standard"
         if _first_match(ql, ["polite", "politer", "formal", "friendly"]):
             tone = "polite" if "formal" not in ql else "formal"
@@ -271,7 +287,14 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]]) -> dic
             tone = "short"
         elif _first_match(ql, ["longer", "detail"]):
             tone = "standard"
-        body = last.get("raw_body") or last.get("body", "")
+        # New message content via pronoun ("Tell him I will share the notes")
+        new_body = None
+        if _first_match(ql, ["tell ", "say "]) and not _first_match(ql, ["make", "change", "send"]):
+            import re as _re
+            m = _re.search(r"(?:tell|say)\s+(?:him|her|them|he|she|they|it|[A-Z][a-zA-Z]+)?\s*(?:that)?\s*(.+)$", question, flags=_re.IGNORECASE)
+            if m:
+                new_body = m.group(1).strip().rstrip("?.!")
+        body = new_body or last.get("raw_body") or last.get("body", "")
         recipient = last.get("recipient", "there")
         draft = _build_draft(recipient, body, tone)
         draft["raw_body"] = body
@@ -285,24 +308,40 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]]) -> dic
             "data": draft,
         }
 
-    # New communication request
-    recipient = _extract_recipient(question) or "there"
-    body = _extract_message_body(question)
-    single_name = len(recipient.split()) == 1 and recipient != "there"
-    draft = _build_draft(recipient, body)
-    draft["raw_body"] = body
-    draft["recipient_confirmed"] = not single_name
+    # New communication request — structured NLU (Gemini + deterministic fallback)
+    intent = parse_communication(question, context, use_gemini=True)
 
-    if single_name:
+    if intent.requires_clarification and not intent.recipient_name:
+        return {
+            "card_type": "message_draft",
+            "title": "Clarification needed",
+            "summary": intent.clarification_question or "Who should I send this to?",
+            "data": {"requires_clarification": True, "delivery_status": "NONE"},
+        }
+
+    recipient = intent.recipient_name or "there"
+    body = intent.message or question
+    draft = _build_draft(recipient, body)
+    if intent.subject:
+        draft["subject"] = intent.subject
+    draft["raw_body"] = body
+    draft["recipient_confirmed"] = not intent.requires_recipient_confirmation
+    draft["relationship"] = intent.relationship
+    draft["action"] = intent.action
+
+    if intent.requires_recipient_confirmation:
         summary = (
-            f"I've drafted a message for {recipient}. Since only a first name was given, "
-            "please confirm the full name of the recipient. The message has NOT been sent — "
+            f"I've drafted a message for {recipient}"
+            + (f" ({intent.relationship})" if intent.relationship else "")
+            + ". Please confirm the recipient details. The message has NOT been sent — "
             "no messaging provider is connected yet."
         )
     else:
         summary = (
-            f"Message drafted for {recipient}. It has NOT been sent — no messaging provider "
-            "is connected. You can ask me to make it more polite or adjust it."
+            f"Message drafted for {recipient}"
+            + (f" ({intent.relationship})" if intent.relationship else "")
+            + ". It has NOT been sent — no messaging provider is connected. "
+            "You can ask me to make it more polite or adjust it."
         )
     return {
         "card_type": "message_draft",
@@ -324,15 +363,20 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
     # Follow-up edits to a previous message draft take priority — e.g.
     # "make it more polite" or "send it tomorrow" contain no comms keywords.
     last_draft = (body.context or {}).get("last_message_draft") if body.context else None
-    if last_draft and _first_match(q, _FOLLOWUP_PATTERNS):
-        return _message_draft_card(body.question, body.context)
+    q_start = q.lstrip()
+    if last_draft and (
+        _first_match(q, _FOLLOWUP_PATTERNS)
+        or _first_match(q_start, ["tell ", "say ", "him ", "her ", "them ", "message him", "message her", "email him", "email her"])
+        or _first_match(q, ["change his name", "change her name", "change the name", "his name", "her name"])
+    ):
+        return _message_draft_card(body.question, body.context, settings)
 
     # Communication / messaging intents first — they may contain business words
     # like "stock" or "payment" that must not trigger inventory routing.
     if _first_match(q, _COMMS_PATTERNS) or (
         "send" in q and _first_match(q, ["reminder", "message", "note", "email", "text"])
     ):
-        return _message_draft_card(body.question, body.context)
+        return _message_draft_card(body.question, body.context, settings)
 
     # Supplier comparison first ("compare X and Y", "which supplier")
     if _first_match(q, ["compare", " vs ", " versus "]) and ("supplier" in q or "deliver" in q):
