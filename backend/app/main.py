@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.alerts_routes import alerts_router
+from app.api.analysis_routes import analysis_router
 from app.api.inventory_routes import inventory_router
 from app.api.purchase_order_routes import procurement_router
 from app.api.routes import router
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=500, content=payload.model_dump())
 
     app.include_router(router)
+    app.include_router(analysis_router)
     app.include_router(inventory_router)
     app.include_router(procurement_router)
     app.include_router(alerts_router)
