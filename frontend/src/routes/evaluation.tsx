@@ -1,329 +1,272 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Boxes, FlaskConical, Languages, TrendingUp } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  AlertCircle,
+  Boxes,
+  CheckCircle2,
+  Languages,
+  Play,
+  RefreshCw,
+  TrendingUp,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { Badge } from "@/components/resolvex/Badge";
+import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
+import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
-import { DEMO_EVALUATION_DATA } from "@/data/mockData";
+import { useResolveX } from "@/context/useResolveX";
 import { resolveXService } from "@/services/api";
-import type { EvaluationDataset } from "@/types/resolvex";
+import type { BackendPs2Evaluation, BackendPs6Evaluation } from "@/types/resolvex";
 
 export const Route = createFileRoute("/evaluation")({
   component: EvaluationPage,
 });
 
-type CaseFilter = "All" | "Resolved" | "Needs Review";
-type EvalDomainTab = "language" | "inventory";
+type EvalDomainTab = "ps2" | "ps6";
 
 function EvaluationPage() {
-  const [dataset, setDataset] = useState<EvaluationDataset>(DEMO_EVALUATION_DATA);
-  const [filter, setFilter] = useState<CaseFilter>("All");
-  const [activeTab, setActiveTab] = useState<EvalDomainTab>("language");
+  const { settings } = useResolveX();
+  const [activeTab, setActiveTab] = useState<EvalDomainTab>("ps2");
+  const [ps2Eval, setPs2Eval] = useState<BackendPs2Evaluation | null>(null);
+  const [ps6Eval, setPs6Eval] = useState<BackendPs6Evaluation | null>(null);
+  const [ps6Source, setPs6Source] = useState<string>("loading");
+  const [isLoadingPs2, setIsLoadingPs2] = useState(false);
+  const [isRunningPs6, setIsRunningPs6] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const loadEvaluations = useCallback(async () => {
+    setErrorMsg(null);
+    setIsLoadingPs2(true);
+    try {
+      const [r2, r6] = await Promise.all([
+        resolveXService.getPs2Evaluation(true, settings.apiBaseUrl),
+        resolveXService.getPs6Evaluation(false, settings.apiBaseUrl),
+      ]);
+      setPs2Eval(r2.evaluation);
+      setPs6Eval(r6.evaluation);
+      setPs6Source(r6.source);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to load evaluation metrics from backend.",
+      );
+    } finally {
+      setIsLoadingPs2(false);
+    }
+  }, [settings.apiBaseUrl]);
 
   useEffect(() => {
-    void resolveXService.getEvaluationDataset().then(setDataset);
-  }, []);
+    void loadEvaluations();
+  }, [loadEvaluations]);
 
-  const filteredCases = dataset.benchmarkCases.filter((item) =>
-    filter === "All" ? true : item.status === filter,
-  );
+  const handleRunLivePs6 = async () => {
+    if (isRunningPs6) return;
+    setIsRunningPs6(true);
+    setErrorMsg(null);
+    try {
+      const res = await resolveXService.getPs6Evaluation(true, settings.apiBaseUrl);
+      setPs6Eval(res.evaluation);
+      setPs6Source(res.source);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "PS6 evaluation run failed.",
+      );
+    } finally {
+      setIsRunningPs6(false);
+    }
+  };
+
+  const ps2ChartData = [
+    {
+      name: "ResolveX Earliest-CRD",
+      accuracy: Math.round((ps2Eval?.accuracy ?? 0) * 100),
+    },
+    {
+      name: "Reactive FIFO Baseline",
+      accuracy: Math.round((ps2Eval?.baseline_accuracy ?? 0.5) * 100),
+    },
+  ];
+
+  const ps6ChartData = ps6Eval
+    ? [
+        { metric: "Precision", value: Math.round(ps6Eval.precision * 100) },
+        { metric: "Recall", value: Math.round(ps6Eval.recall * 100) },
+        { metric: "F1 Score", value: Math.round(ps6Eval.f1_score * 100) },
+        { metric: "Resolution Acc.", value: Math.round(ps6Eval.resolution_accuracy * 100) },
+      ]
+    : [];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
-        eyebrow="Unified Benchmark & Telemetry"
-        title="Evaluation Metrics (DEMO DATA)"
-        description={`${dataset.benchmarkName} • ${dataset.sampleCount} synthetic prompts • Updated ${dataset.lastUpdated}`}
-        actions={<Badge tone="amber">DEMO DATA — SIMULATED BENCHMARKS</Badge>}
+        eyebrow="Live Backend Evaluation"
+        title="PS2 & PS6 Benchmark Telemetry"
+        description="Real measured results executed by backend evaluators against the SQLite inventory database and 48-case ambiguity dataset."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              isLoading={isLoadingPs2}
+              iconLeft={<RefreshCw className="h-4 w-4 text-cyan-400" />}
+              onClick={() => void loadEvaluations()}
+            >
+              Refresh Metrics
+            </Button>
+            <Button
+              isLoading={isRunningPs6}
+              iconLeft={<Play className="h-4 w-4" />}
+              onClick={() => void handleRunLivePs6()}
+            >
+              Run 48-Case PS6 Benchmark
+            </Button>
+          </div>
+        }
       />
 
-      {/* Explicit DEMO DATA Warning Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-amber-500/10 px-5 py-4">
-        <div className="flex items-start sm:items-center gap-3">
-          <FlaskConical className="h-5 w-5 shrink-0 text-amber-300" />
-          <div>
-            <p className="text-sm font-semibold text-amber-100">
-              DEMO DATA ONLY — No Live Model, ERP, or Database Telemetry
-            </p>
-            <p className="text-xs text-amber-200/80">
-              All ambiguity precision/recall, inventory service-level, CRD risk, and stage latency
-              figures below are illustrative synthetic metrics prepared for the future FastAPI
-              evaluation endpoint.
-            </p>
-          </div>
-        </div>
-        <Badge tone="amber">DEMO DATA</Badge>
-      </div>
+      <DemoBanner compact />
 
-      {/* Domain Switcher: PS6 vs PS2 */}
+      {errorMsg && (
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs sm:text-sm text-rose-100"
+        >
+          <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Domain Switcher */}
       <div className="inline-flex rounded-xl border border-white/10 bg-slate-900/75 p-1">
         <button
           type="button"
-          onClick={() => setActiveTab("language")}
+          onClick={() => setActiveTab("ps2")}
           className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
-            activeTab === "language"
-              ? "bg-gradient-to-r from-violet-600/80 to-cyan-600/80 text-white shadow"
-              : "text-slate-300 hover:text-white"
-          }`}
-        >
-          <Languages className="h-4 w-4" />
-          PS6 Language Intelligence Metrics (DEMO DATA)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("inventory")}
-          className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
-            activeTab === "inventory"
+            activeTab === "ps2"
               ? "bg-gradient-to-r from-cyan-600/80 to-violet-600/80 text-white shadow"
               : "text-slate-300 hover:text-white"
           }`}
         >
           <Boxes className="h-4 w-4" />
-          PS2 Inventory Intelligence Metrics (DEMO DATA)
+          PS2 Deterministic Inventory Eval
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("ps6")}
+          className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-xs sm:text-sm font-medium transition-all ${
+            activeTab === "ps6"
+              ? "bg-gradient-to-r from-violet-600/80 to-cyan-600/80 text-white shadow"
+              : "text-slate-300 hover:text-white"
+          }`}
+        >
+          <Languages className="h-4 w-4" />
+          PS6 Ambiguity Benchmark
         </button>
       </div>
 
-      {activeTab === "language" ? (
-        <>
-          {/* PS6 Overview Metric Cards */}
+      {activeTab === "ps2" ? (
+        <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {dataset.overview.map((metric) => (
-              <Card key={metric.label} className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-400">{metric.label}</span>
-                  <Badge tone="cyan">DEMO DATA</Badge>
-                </div>
-                <p className="font-mono text-3xl font-bold text-white">{metric.value}</p>
-                <p className="inline-flex items-center gap-1 text-xs font-medium text-emerald-300">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  <span>{metric.delta}</span>
-                </p>
-                <p className="text-[11px] text-slate-400">{metric.note}</p>
-              </Card>
-            ))}
-          </div>
-
-          {/* PS6 Recharts Visualizations */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    Category Precision / Recall / F1
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Simulated span detection accuracy by ambiguity taxonomy
-                  </p>
-                </div>
-                <Badge tone="amber">DEMO DATA</Badge>
-              </div>
-
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={dataset.categoryPerformance}
-                    margin={{ top: 10, right: 12, left: -16, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="category" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
-                    <YAxis domain={[60, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0a0f1f",
-                        borderColor: "rgba(255,255,255,0.14)",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Bar
-                      dataKey="precision"
-                      name="Precision %"
-                      fill="#8b5cf6"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar dataKey="recall" name="Recall %" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="f1" name="F1 %" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <Card className="space-y-1.5">
+              <span className="text-xs text-slate-400">Scenario Accuracy</span>
+              <p className="font-mono text-3xl font-bold text-emerald-300">
+                {ps2Eval ? `${Math.round(ps2Eval.accuracy * 100)}%` : "—"}
+              </p>
+              <p className="inline-flex items-center gap-1 text-xs text-cyan-300">
+                <TrendingUp className="h-3.5 w-3.5" />
+                {ps2Eval
+                  ? `+${Math.round(ps2Eval.improvement_over_baseline * 100)}% vs FIFO baseline`
+                  : "Waiting for backend"}
+              </p>
             </Card>
-
-            <Card className="space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    Clarity Progression Across Turns
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    ResolveX vs. Single-Turn LLM vs. Raw Prompt (Synthetic Eval)
-                  </p>
-                </div>
-                <Badge tone="amber">DEMO DATA</Badge>
-              </div>
-
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={dataset.baselineComparison}
-                    margin={{ top: 10, right: 16, left: -16, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="turn" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
-                    <YAxis domain={[20, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0a0f1f",
-                        borderColor: "rgba(255,255,255,0.14)",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Line
-                      type="monotone"
-                      dataKey="resolveXPipeline"
-                      name="ResolveX Pipeline"
-                      stroke="#06b6d4"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="singleTurnLLM"
-                      name="Single-Turn LLM"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="rawPromptClarity"
-                      name="Raw Prompt Baseline"
-                      stroke="#64748b"
-                      strokeDasharray="4 4"
-                      strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+            <Card className="space-y-1.5">
+              <span className="text-xs text-slate-400">Scenarios Passed</span>
+              <p className="font-mono text-3xl font-bold text-white">
+                {ps2Eval ? `${ps2Eval.passed} / ${ps2Eval.total_scenarios}` : "—"}
+              </p>
+              <p className="text-xs text-slate-400">Net avail, CRD risk, shortage, alloc</p>
+            </Card>
+            <Card className="space-y-1.5">
+              <span className="text-xs text-slate-400">Shortages Detected</span>
+              <p className="font-mono text-3xl font-bold text-rose-300">
+                {ps2Eval?.shortages_detected ?? "—"}
+              </p>
+              <p className="text-xs text-slate-400">Active material shortages</p>
+            </Card>
+            <Card className="space-y-1.5">
+              <span className="text-xs text-slate-400">Orders Evaluated</span>
+              <p className="font-mono text-3xl font-bold text-cyan-300">
+                {ps2Eval?.crd_risk_orders_evaluated ?? "—"}
+              </p>
+              <p className="text-xs text-slate-400">Open customer orders</p>
             </Card>
           </div>
 
-          {/* Latency + Cases Table */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             <Card className="lg:col-span-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    Simulated Stage Latency (ms)
-                  </h3>
-                  <p className="text-xs text-slate-400">Target per-stage FastAPI budget</p>
-                </div>
-                <Badge tone="amber">DEMO DATA</Badge>
-              </div>
-
+              <h3 className="text-base font-semibold text-white">
+                ResolveX vs. Reactive FIFO Baseline (%)
+              </h3>
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={dataset.latencyDistribution}
-                    layout="vertical"
-                    margin={{ top: 5, right: 16, left: 20, bottom: 5 }}
-                  >
+                  <BarChart data={ps2ChartData} margin={{ top: 10, right: 16, left: -16, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <YAxis
-                      dataKey="stage"
-                      type="category"
-                      width={120}
-                      tick={{ fill: "#cbd5e1", fontSize: 11 }}
-                    />
+                    <XAxis dataKey="name" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
+                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#0a0f1f",
                         borderColor: "rgba(255,255,255,0.14)",
                         borderRadius: "12px",
                         color: "#f8fafc",
-                        fontSize: "12px",
                       }}
                     />
-                    <Bar
-                      dataKey="latencyMs"
-                      name="Latency (ms)"
-                      fill="#06b6d4"
-                      radius={[0, 6, 6, 0]}
-                    />
+                    <Bar dataKey="accuracy" name="Accuracy %" fill="#06b6d4" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+              {ps2Eval && <p className="text-xs text-slate-400">{ps2Eval.note}</p>}
             </Card>
 
             <Card padding="none" className="lg:col-span-7 overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-semibold text-white">Sample Benchmark Cases</h3>
-                  <Badge tone="amber">DEMO DATA</Badge>
-                </div>
-                <div className="flex gap-1.5">
-                  {(["All", "Resolved", "Needs Review"] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setFilter(tab)}
-                      className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                        filter === tab
-                          ? "bg-violet-500/25 text-white border border-violet-400/40"
-                          : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                      }`}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
+              <div className="border-b border-white/10 p-5">
+                <h3 className="text-base font-semibold text-white">
+                  Scenario Verification Breakdown
+                </h3>
               </div>
-
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[540px] text-left text-xs sm:text-sm">
+                <table className="w-full text-left text-xs sm:text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-slate-400">
-                      <th className="px-4 py-3">Case</th>
-                      <th className="px-4 py-3">Primary Type</th>
-                      <th className="px-4 py-3">Spans</th>
-                      <th className="px-4 py-3">Clarity</th>
-                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Scenario</th>
+                      <th className="px-4 py-3">Details</th>
+                      <th className="px-4 py-3">Result</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/8">
-                    {filteredCases.map((row) => (
-                      <tr key={row.id} className="hover:bg-white/3">
+                    {(ps2Eval?.results_detail ?? []).map((row, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-3 font-mono text-cyan-300">
+                          {String(row["scenario"] ?? "")}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-300">
+                          {JSON.stringify(
+                            Object.fromEntries(
+                              Object.entries(row).filter(([k]) => k !== "scenario" && k !== "pass"),
+                            ),
+                          )}
+                        </td>
                         <td className="px-4 py-3">
-                          <span className="font-mono text-[11px] text-cyan-300">{row.id}</span>
-                          <p className="text-xs text-slate-300 mt-0.5">{row.promptSnippet}</p>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-300">{row.category}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                          {row.detectedSpans}
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-emerald-300">
-                          {row.finalClarity}%
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge tone={row.status === "Resolved" ? "emerald" : "amber"}>
-                            {row.status}
+                          <Badge tone={row["pass"] ? "emerald" : "rose"}>
+                            {row["pass"] ? "PASS" : "FAIL"}
                           </Badge>
                         </td>
                       </tr>
@@ -333,143 +276,86 @@ function EvaluationPage() {
               </div>
             </Card>
           </div>
-        </>
+        </div>
       ) : (
-        <>
-          {/* PS2 Inventory Intelligence Overview Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {dataset.inventoryMetrics.overview.map((metric) => (
-              <Card key={metric.label} className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-400">{metric.label}</span>
-                  <Badge tone="amber">DEMO DATA</Badge>
+        <div className="space-y-6">
+          {!ps6Eval ? (
+            <Card className="space-y-4 py-8 text-center">
+              <p className="text-sm text-slate-300">
+                No PS6 evaluation record persisted yet in SQLite ({ps6Source}).
+              </p>
+              <div className="flex justify-center">
+                <Button isLoading={isRunningPs6} onClick={() => void handleRunLivePs6()}>
+                  Run 48-Case PS6 Evaluation Now
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="space-y-1.5">
+                  <span className="text-xs text-slate-400">Precision / Recall</span>
+                  <p className="font-mono text-2xl font-bold text-white">
+                    {Math.round(ps6Eval.precision * 100)}% / {Math.round(ps6Eval.recall * 100)}%
+                  </p>
+                  <p className="text-xs text-slate-400">Dataset size: {ps6Eval.dataset_size}</p>
+                </Card>
+                <Card className="space-y-1.5">
+                  <span className="text-xs text-slate-400">F1 Score</span>
+                  <p className="font-mono text-3xl font-bold text-cyan-300">
+                    {(ps6Eval.f1_score * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-slate-400">Model: {ps6Eval.model}</p>
+                </Card>
+                <Card className="space-y-1.5">
+                  <span className="text-xs text-slate-400">Classification Accuracy</span>
+                  <p className="font-mono text-3xl font-bold text-emerald-300">
+                    {(ps6Eval.resolution_accuracy * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-slate-400">Exact category match</p>
+                </Card>
+                <Card className="space-y-1.5">
+                  <span className="text-xs text-slate-400">False Clarification Rate</span>
+                  <p className="font-mono text-3xl font-bold text-amber-300">
+                    {(ps6Eval.false_clarification_rate * 100).toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-slate-400">Clear prompts flagged unnecessarily</p>
+                </Card>
+              </div>
+
+              <Card className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-white">
+                    PS6 Measured Benchmark Metrics (%)
+                  </h3>
+                  <Badge tone="emerald">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Source: {ps6Source}
+                  </Badge>
                 </div>
-                <p className="font-mono text-3xl font-bold text-white">{metric.value}</p>
-                <p className="inline-flex items-center gap-1 text-xs font-medium text-emerald-300">
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  <span>{metric.delta}</span>
-                </p>
-                <p className="text-[11px] text-slate-400">{metric.note}</p>
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={ps6ChartData} margin={{ top: 10, right: 16, left: -16, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                      <XAxis dataKey="metric" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
+                      <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#0a0f1f",
+                          borderColor: "rgba(255,255,255,0.14)",
+                          borderRadius: "12px",
+                          color: "#f8fafc",
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="value" name="Score %" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    Stock Health &amp; CRD On-Time Trend
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Weekly service-level recovery &amp; shortage risk reduction
-                  </p>
-                </div>
-                <Badge tone="amber">DEMO DATA</Badge>
-              </div>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={dataset.inventoryMetrics.stockHealthTrend}
-                    margin={{ top: 10, right: 16, left: -16, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="week" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
-                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0a0f1f",
-                        borderColor: "rgba(255,255,255,0.14)",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Line
-                      type="monotone"
-                      dataKey="serviceLevel"
-                      name="Service Level %"
-                      stroke="#10b981"
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="crdOnTimeRate"
-                      name="CRD On-Time %"
-                      stroke="#06b6d4"
-                      strokeWidth={2.5}
-                      dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="shortageRiskIndex"
-                      name="Shortage Risk Index"
-                      stroke="#f43f5e"
-                      strokeWidth={2}
-                      strokeDasharray="4 4"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-
-            <Card className="space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-base font-semibold text-white">
-                    Warehouse Utilization &amp; Net Shortage Units
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Available vs. reserved vs. at-risk units per hub
-                  </p>
-                </div>
-                <Badge tone="amber">DEMO DATA</Badge>
-              </div>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={dataset.inventoryMetrics.warehouseUtilization}
-                    margin={{ top: 10, right: 12, left: -10, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
-                    <XAxis dataKey="warehouse" tick={{ fill: "#cbd5e1", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#0a0f1f",
-                        borderColor: "rgba(255,255,255,0.14)",
-                        borderRadius: "12px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                    />
-                    <Legend wrapperStyle={{ fontSize: "12px" }} />
-                    <Bar
-                      dataKey="availableUnits"
-                      name="Available"
-                      fill="#10b981"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="reservedUnits"
-                      name="Reserved"
-                      fill="#8b5cf6"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="shortageUnits"
-                      name="Net Shortage"
-                      fill="#f43f5e"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
-          </div>
-        </>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

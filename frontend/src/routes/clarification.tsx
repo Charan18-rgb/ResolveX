@@ -44,6 +44,9 @@ function ClarificationPage() {
     allowOptionalRefinement,
     setAllowOptionalRefinement,
     submitClarificationTurn,
+    isSubmittingClarification,
+    apiError,
+    clearApiError,
     revertToTurn,
     resetClarificationFlow,
     generateFinalResolution,
@@ -94,17 +97,17 @@ function ClarificationPage() {
       ? `Routed by Verification Layer: ${displayedQuestion.selectionExplanation}`
       : localizeSelectionReason(activeSelectionReason, rawDisplayedQuestion, uiLanguage);
 
-  const handleSelectOption = (optionId: string, resolvesTo: string) => {
-    if (!displayedQuestion) return;
+  const handleSelectOption = async (optionId: string, resolvesTo: string) => {
+    if (!displayedQuestion || isSubmittingClarification) return;
     setCustomInput("");
     setCustomError(null);
     setVerificationGateAlert(null);
-    submitClarificationTurn(displayedQuestion.id, optionId, "", resolvesTo);
+    await submitClarificationTurn(displayedQuestion.id, optionId, "", resolvesTo);
   };
 
-  const handleSubmitCustom = (e: FormEvent) => {
+  const handleSubmitCustom = async (e: FormEvent) => {
     e.preventDefault();
-    if (!displayedQuestion) return;
+    if (!displayedQuestion || isSubmittingClarification) return;
     const trimmed = customInput.trim();
     if (!trimmed) {
       setCustomError(
@@ -114,7 +117,7 @@ function ClarificationPage() {
     }
     setCustomError(null);
     setVerificationGateAlert(null);
-    submitClarificationTurn(displayedQuestion.id, null, trimmed, trimmed);
+    await submitClarificationTurn(displayedQuestion.id, null, trimmed, trimmed);
     setCustomInput("");
   };
 
@@ -191,11 +194,19 @@ function ClarificationPage() {
         }
       />
 
-      <DemoBanner
-        compact
-        label="DEMO OPTIMIZER"
-        description="Deterministic local priority ranking & early-stopping engine. Structured for future FastAPI /api/v1/resolve orchestration."
-      />
+      <DemoBanner compact />
+
+      {apiError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs sm:text-sm text-rose-100"
+        >
+          <span>{apiError}</span>
+          <Button size="sm" variant="secondary" onClick={clearApiError}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <MultilingualContextBanner
         compact
@@ -406,8 +417,9 @@ function ClarificationPage() {
                         <button
                           key={opt.id}
                           type="button"
-                          onClick={() => handleSelectOption(opt.id, opt.resolvesTo)}
-                          className="group cursor-pointer rounded-xl border border-white/12 bg-[#050814]/80 p-4 text-left transition-all hover:border-cyan-400/70 hover:bg-cyan-500/12"
+                          disabled={isSubmittingClarification}
+                          onClick={() => void handleSelectOption(opt.id, opt.resolvesTo)}
+                          className="group cursor-pointer rounded-xl border border-white/12 bg-[#050814]/80 p-4 text-left transition-all hover:border-cyan-400/70 hover:bg-cyan-500/12 disabled:opacity-50"
                         >
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <span className="text-sm font-semibold text-white group-hover:text-cyan-200">
@@ -422,7 +434,7 @@ function ClarificationPage() {
                   </div>
 
                   <form
-                    onSubmit={handleSubmitCustom}
+                    onSubmit={(e) => void handleSubmitCustom(e)}
                     className="relative pt-3 border-t border-white/10 space-y-2.5"
                   >
                     <label
@@ -436,16 +448,17 @@ function ClarificationPage() {
                       <input
                         id="custom-optimizer-input"
                         type="text"
+                        disabled={isSubmittingClarification}
                         value={customInput}
                         onChange={(e) => {
                           setCustomInput(e.target.value);
                           if (customError) setCustomError(null);
                         }}
                         placeholder={`Specify exact constraint for "${displayedQuestion.targetToken}"...`}
-                        className="flex-1 rounded-xl border border-white/12 bg-[#050814]/90 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none"
+                        className="flex-1 rounded-xl border border-white/12 bg-[#050814]/90 px-3.5 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none disabled:opacity-60"
                       />
-                      <Button type="submit" variant="secondary">
-                        Submit Custom Answer
+                      <Button type="submit" variant="secondary" isLoading={isSubmittingClarification}>
+                        {isSubmittingClarification ? "Sending to Gemini..." : "Submit Clarification"}
                       </Button>
                     </div>
                     {customError && (

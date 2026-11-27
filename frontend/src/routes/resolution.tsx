@@ -18,6 +18,7 @@ import { Badge } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
+import { InventoryInsightPanel } from "@/components/resolvex/InventoryInsightPanel";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { VerificationSummaryPanel } from "@/components/resolvex/VerificationSummaryPanel";
@@ -144,6 +145,21 @@ function ResolutionPage() {
       />
 
       <DemoBanner compact />
+
+      {activeAnalysis.backendData?.inventory_insight && (
+        <InventoryInsightPanel insight={activeAnalysis.backendData.inventory_insight} />
+      )}
+
+      {activeAnalysis.backendData?.resolved_intent?.direct_answer && (
+        <Card className="border-emerald-500/35 bg-emerald-950/15 space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+            Direct Answer (Gemini Live)
+          </p>
+          <p className="text-sm sm:text-base text-white">
+            {activeAnalysis.backendData.resolved_intent.direct_answer}
+          </p>
+        </Card>
+      )}
 
       {!isVerifiedResolved && (
         <div

@@ -152,9 +152,14 @@ def get_briefing(
             briefing["ai_enriched"] = True
         else:
             briefing["ai_summary"] = None
-            briefing["ai_note"] = error or "AI enrichment unavailable."
+            briefing["ai_note"] = (
+                "AI narrative unavailable right now (Gemini key missing or rate limit reached). "
+                "Deterministic SQLite inventory metrics below remain fully authoritative."
+            )
     except Exception:
         briefing["ai_summary"] = None
-        briefing["ai_note"] = "AI enrichment unavailable."
+        briefing["ai_note"] = (
+            "AI narrative unavailable right now. Deterministic SQLite inventory metrics remain authoritative."
+        )
 
     return briefing

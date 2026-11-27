@@ -14,6 +14,7 @@ import { Badge, type BadgeTone } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
 import { DemoBanner } from "@/components/resolvex/DemoBanner";
+import { InventoryInsightPanel } from "@/components/resolvex/InventoryInsightPanel";
 import { MultilingualContextBanner } from "@/components/resolvex/MultilingualContextBanner";
 import { PromptHighlighter } from "@/components/resolvex/PromptHighlighter";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
@@ -74,6 +75,45 @@ function AnalysisPage() {
       />
 
       <DemoBanner compact />
+
+      {activeAnalysis.backendData && (
+        <Card className="border-violet-500/25 bg-violet-950/15 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={activeAnalysis.backendData.status === "RESOLVED" ? "emerald" : "amber"}>
+                Backend Status: {activeAnalysis.backendData.status}
+              </Badge>
+              {activeAnalysis.backendData.classification && (
+                <Badge tone="cyan">
+                  Classification: {activeAnalysis.backendData.classification}
+                </Badge>
+              )}
+              <span className="font-mono text-slate-400">
+                Conv ID: {activeAnalysis.backendData.conversation_id.slice(0, 8)}… • Turn{" "}
+                {activeAnalysis.backendData.turn_count}
+              </span>
+            </div>
+            {activeAnalysis.backendData.status === "RESOLVED" && (
+              <Button
+                size="sm"
+                onClick={() => void navigate({ to: "/resolution" })}
+                iconRight={<ArrowRight className="h-3.5 w-3.5" />}
+              >
+                View Resolved Intent
+              </Button>
+            )}
+          </div>
+          {activeAnalysis.backendData.missing_required_info.length > 0 && (
+            <p className="text-xs text-amber-200">
+              Missing Required Info: {activeAnalysis.backendData.missing_required_info.join(", ")}
+            </p>
+          )}
+        </Card>
+      )}
+
+      {activeAnalysis.backendData?.inventory_insight && (
+        <InventoryInsightPanel insight={activeAnalysis.backendData.inventory_insight} />
+      )}
 
       <MultilingualContextBanner
         multilingual={activeAnalysis.multilingual}

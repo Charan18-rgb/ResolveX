@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # Gemini settings (no hardcoded key; model is configurable)
     gemini_api_key: str = Field(default="")
     gemini_model: str = Field(default="gemini-3.8-flash")
+    gemini_fallback_model: str = Field(default="gemini-3.5-flash")
     gemini_timeout_seconds: int = Field(default=15, ge=1, le=120)
 
     # SQLite database path
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
 
     # CORS origins (comma-separated string in .env)
     allowed_origins: str = Field(
-        default="http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173"
+        default="http://localhost:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
     )
 
     @field_validator("gemini_model", "database_path")
@@ -45,8 +46,13 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> list[str]:
-        """Parse comma-separated CORS origins into a clean list."""
-        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        """Parse comma-separated CORS origins into a clean list (always allow Vite dev port 8080 in dev)."""
+        origins = [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+        if self.app_env == "development":
+            for dev_origin in ("http://localhost:8080", "http://127.0.0.1:8080"):
+                if dev_origin not in origins:
+                    origins.append(dev_origin)
+        return origins
 
     @property
     def is_ai_configured(self) -> bool:

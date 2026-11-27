@@ -110,13 +110,19 @@ function LandingPage() {
     selectExamplePrompt,
     selectMultilingualSample,
     settings,
+    apiError,
+    clearApiError,
   } = useResolveX();
 
   const [hasAnalyzedHere, setHasAnalyzedHere] = useState(false);
 
   const handleAnalyze = async (overridePrompt?: string) => {
-    await runAnalysis(overridePrompt);
-    setHasAnalyzedHere(true);
+    try {
+      await runAnalysis(overridePrompt);
+      setHasAnalyzedHere(true);
+    } catch {
+      // apiError surfaced cleanly in UI
+    }
   };
 
   return (
@@ -198,17 +204,46 @@ function LandingPage() {
               isAnalyzing={isAnalyzing}
               onAnalyze={handleAnalyze}
               onSelectExample={async (id) => {
-                await selectExamplePrompt(id);
-                setHasAnalyzedHere(true);
+                try {
+                  await selectExamplePrompt(id);
+                  setHasAnalyzedHere(true);
+                } catch {
+                  // apiError surfaced cleanly in UI
+                }
               }}
               onSelectMultilingualSample={async (id) => {
-                await selectMultilingualSample(id);
-                setHasAnalyzedHere(true);
+                try {
+                  await selectMultilingualSample(id);
+                  setHasAnalyzedHere(true);
+                } catch {
+                  // apiError surfaced cleanly in UI
+                }
               }}
               showControls={false}
               showExamples={true}
               analyzeLabel="Analyze Prompt"
             />
+
+            {apiError && (
+              <div
+                role="alert"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs sm:text-sm text-rose-100"
+              >
+                <span>{apiError}</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={clearApiError}>
+                    Dismiss
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void navigate({ to: "/settings" })}
+                  >
+                    Check Settings
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <AnalysisProgressBanner
               isAnalyzing={isAnalyzing}
@@ -216,12 +251,16 @@ function LandingPage() {
               stageLabel={analysisStageLabel}
             />
 
-            {/* Live Mock Preview */}
+            {/* Analysis Preview */}
             <Card className="border-cyan-500/20 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <Badge tone="cyan">
-                    {hasAnalyzedHere ? "LIVE MOCK RESULT" : "SAMPLE ANALYSIS PREVIEW"}
+                  <Badge tone={!activeAnalysis.isDemoData ? "emerald" : "cyan"}>
+                    {!activeAnalysis.isDemoData
+                      ? `LIVE BACKEND (${activeAnalysis.backendData?.status ?? "ANALYZED"})`
+                      : hasAnalyzedHere
+                        ? "LIVE MOCK RESULT"
+                        : "SAMPLE ANALYSIS PREVIEW"}
                   </Badge>
                   <Badge tone="violet">
                     {activeAnalysis.multilingual.detectedLanguage}

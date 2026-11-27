@@ -19,6 +19,7 @@ from app.database.connection import init_db
 from app.inventory.allocation_engine import recalculate_allocations
 from app.inventory.order_risk_engine import evaluate_order_risks
 from app.inventory.seed import seed_demo_data
+from app.inventory.shortage_detector import sync_inventory_alerts
 from app.models.schemas import ErrorDetail, ErrorResponse
 
 
@@ -30,6 +31,7 @@ async def lifespan(_app: FastAPI):
     seed_demo_data(settings.database_path)
     recalculate_allocations(settings.database_path)
     evaluate_order_risks(settings.database_path)
+    sync_inventory_alerts(settings.database_path)
     yield
 
 

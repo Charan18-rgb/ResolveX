@@ -45,11 +45,21 @@ function WorkspacePage() {
     selectMultilingualSample,
     loadHistorySession,
     clearHistory,
+    apiError,
+    clearApiError,
   } = useResolveX();
 
   const handleAnalyzeAndOpen = async (overridePrompt?: string) => {
-    await runAnalysis(overridePrompt);
-    void navigate({ to: "/analysis" });
+    try {
+      const result = await runAnalysis(overridePrompt);
+      if (!result.isDemoData && result.backendData?.status === "RESOLVED") {
+        void navigate({ to: "/resolution" });
+      } else {
+        void navigate({ to: "/analysis" });
+      }
+    } catch {
+      // Error surfaced cleanly via apiError banner
+    }
   };
 
   const pipelineDestinations = [
@@ -109,6 +119,18 @@ function WorkspacePage() {
       />
 
       <DemoBanner compact />
+
+      {apiError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-500/12 px-4 py-3 text-xs sm:text-sm text-rose-100"
+        >
+          <span>{apiError}</span>
+          <Button size="sm" variant="secondary" onClick={clearApiError}>
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <AnalysisProgressBanner
         isAnalyzing={isAnalyzing}

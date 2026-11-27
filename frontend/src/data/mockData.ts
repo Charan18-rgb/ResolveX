@@ -36,10 +36,10 @@ import {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   apiBaseUrl: ENV_CONFIG.apiBaseUrl,
-  integrationMode: "mock",
+  integrationMode: "live",
   ambiguityThreshold: 60,
   maxClarificationQuestions: 3,
-  defaultDomain: "Software Engineering",
+  defaultDomain: "General",
   defaultStrictness: "Balanced",
   defaultRole: "Inventory Planner",
   reduceMotion: false,

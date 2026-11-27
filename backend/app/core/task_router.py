@@ -28,6 +28,14 @@ _INVENTORY_ACTION_KEYWORDS = {
     "bill_of_material",
     "component",
     "availability",
+    "crd",
+    "mat-chip",
+    "mat-steel",
+    "mat-copper",
+    "mat-bolt",
+    "delivery_risk",
+    "purchase_order",
+    "proposal",
 }
 
 

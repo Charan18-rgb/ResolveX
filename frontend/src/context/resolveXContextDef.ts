@@ -3,6 +3,17 @@ import type {
   AnalysisResult,
   AppSettings,
   AssistantMessage,
+  BackendAlertItem,
+  BackendBriefingResponse,
+  BackendConversationDetail,
+  BackendEventIngestionResponse,
+  BackendHealthStatus,
+  BackendInventoryEvent,
+  BackendInventoryOverviewResponse,
+  BackendOrderRiskItem,
+  BackendOrderRow,
+  BackendPurchaseOrderProposal,
+  BackendShortageItem,
   ClarificationAnswer,
   ClarificationOptimizerState,
   ContextIntelligenceGraphData,
@@ -24,6 +35,12 @@ import type {
 } from "@/types/resolvex";
 
 export interface ResolveXContextValue {
+  // Backend Connectivity & Errors
+  backendHealth: BackendHealthStatus | null;
+  refreshBackendHealth: () => Promise<BackendHealthStatus>;
+  apiError: string | null;
+  clearApiError: () => void;
+
   // PS6 Language Intelligence
   promptInput: string;
   setPromptInput: (value: string) => void;
@@ -35,9 +52,11 @@ export interface ResolveXContextValue {
   setLanguage: (value: LanguageOption) => void;
   uiLanguage: ResolvedLanguage;
   isAnalyzing: boolean;
+  isSubmittingClarification: boolean;
   analysisStage: number;
   analysisStageLabel: string;
   activeAnalysis: AnalysisResult;
+  activeConversationDetail: BackendConversationDetail | null;
   selectedInterpretationId: string | null;
   setSelectedInterpretationId: (id: string | null) => void;
   selectedInterpretation: Interpretation | null;
@@ -63,7 +82,7 @@ export interface ResolveXContextValue {
     selectedOptionId: string | null,
     customAnswer: string,
     resolvedValue: string,
-  ) => void;
+  ) => Promise<void>;
   revertToTurn: (turnIndex: number) => void;
   resetClarificationFlow: () => void;
   finalResolution: FinalResolution;
@@ -82,6 +101,32 @@ export interface ResolveXContextValue {
   // PS2 Smart Inventory Intelligence & Role Views
   activeRole: UserDemoRole;
   setActiveRole: (role: UserDemoRole) => void;
+  isLoadingInventory: boolean;
+  ps2Error: string | null;
+  backendInventoryOverview: BackendInventoryOverviewResponse | null;
+  backendOrders: BackendOrderRow[];
+  backendOrderRisks: BackendOrderRiskItem[];
+  backendShortages: BackendShortageItem[];
+  backendProposals: BackendPurchaseOrderProposal[];
+  backendAlerts: BackendAlertItem[];
+  backendBriefing: BackendBriefingResponse | null;
+  backendEvents: BackendInventoryEvent[];
+  refreshInventoryData: () => Promise<void>;
+  generatePoProposals: () => Promise<BackendPurchaseOrderProposal[]>;
+  recalculateInventoryAllocations: () => Promise<void>;
+  ingestInventoryEvent: (payload: {
+    event_id: string;
+    event_type: string;
+    entity_ref: string;
+    payload: Record<string, unknown>;
+    simulated?: boolean;
+  }) => Promise<BackendEventIngestionResponse>;
+  acknowledgeBackendAlert: (alertId: number) => Promise<void>;
+  decidePoProposal: (
+    proposalId: string,
+    decision: "approve" | "reject",
+    comment?: string,
+  ) => Promise<{ ok: boolean; message: string }>;
   materials: InventoryMaterial[];
   orders: InventoryOrder[];
   recommendations: PurchaseRecommendation[];
@@ -93,7 +138,10 @@ export interface ResolveXContextValue {
   assistantOpen: boolean;
   setAssistantOpen: (open: boolean) => void;
   assistantMessages: AssistantMessage[];
-  sendAssistantQuery: (query: string) => void;
+  isAssistantLoading: boolean;
+  assistantConversationId: string | null;
+  resetAssistantConversation: () => void;
+  sendAssistantQuery: (query: string) => Promise<void>;
   notifications: NotificationItem[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;

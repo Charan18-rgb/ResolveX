@@ -32,14 +32,22 @@ const DOMAINS: DomainContext[] = [
 const STRICTNESS: StrictnessLevel[] = ["Balanced", "Strict", "Exploratory"];
 
 function SettingsPage() {
-  const { settings, updateSettings, resetSettings, clearHistory, activeRole, setActiveRole } =
-    useResolveX();
+  const {
+    settings,
+    updateSettings,
+    resetSettings,
+    clearHistory,
+    activeRole,
+    setActiveRole,
+    backendHealth,
+  } = useResolveX();
 
   const [apiUrlInput, setApiUrlInput] = useState(settings.apiBaseUrl);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [historyClearedNotice, setHistoryClearedNotice] = useState(false);
-  const [healthPreview, setHealthPreview] = useState<BackendHealthStatus | null>(null);
+  const [healthPreview, setHealthPreview] = useState<BackendHealthStatus | null>(backendHealth);
+  const [isTestingHealth, setIsTestingHealth] = useState(false);
 
   const handleSaveApiConfig = (e: FormEvent) => {
     e.preventDefault();
@@ -61,11 +69,16 @@ function SettingsPage() {
   };
 
   const handlePreviewConnection = async () => {
-    const status = await resolveXService.previewBackendConnection(
-      apiUrlInput,
-      settings.integrationMode,
-    );
-    setHealthPreview(status);
+    setIsTestingHealth(true);
+    try {
+      const status = await resolveXService.previewBackendConnection(
+        apiUrlInput,
+        settings.integrationMode,
+      );
+      setHealthPreview(status);
+    } finally {
+      setIsTestingHealth(false);
+    }
   };
 
   return (
@@ -100,8 +113,8 @@ function SettingsPage() {
               <Server className="h-4 w-4 text-cyan-400" />
               <h3 className="text-base font-semibold text-white">API Endpoint Configuration</h3>
             </div>
-            <Badge tone="cyan">
-              {settings.integrationMode === "mock" ? "Mock Engine" : "FastAPI Ready"}
+            <Badge tone={settings.integrationMode === "live" ? "emerald" : "amber"}>
+              {settings.integrationMode === "live" ? "Live FastAPI Backend" : "Local Mock Mode"}
             </Badge>
           </div>
 
@@ -134,8 +147,8 @@ function SettingsPage() {
               <div className="grid grid-cols-2 gap-2.5">
                 {(
                   [
-                    { id: "mock", label: "Local Mock Mode" },
-                    { id: "fastapi-ready", label: "FastAPI-Ready Profile" },
+                    { id: "live", label: "Live FastAPI + Gemini" },
+                    { id: "mock", label: "Offline Mock Fallback" },
                   ] as const
                 ).map((mode) => (
                   <button
@@ -162,9 +175,10 @@ function SettingsPage() {
                 type="button"
                 size="sm"
                 variant="secondary"
+                isLoading={isTestingHealth}
                 onClick={() => void handlePreviewConnection()}
               >
-                Preview Contract Status
+                Test Backend Health (/health)
               </Button>
               {savedNotice && (
                 <span className="inline-flex items-center gap-1 text-xs text-emerald-300">
@@ -176,9 +190,20 @@ function SettingsPage() {
           </form>
 
           {healthPreview && (
-            <div className="rounded-xl border border-white/10 bg-[#050814]/85 p-3.5 space-y-1 text-xs">
-              <p className="font-mono text-cyan-300">{healthPreview.baseUrl}</p>
-              <p className="text-slate-300">{healthPreview.message}</p>
+            <div
+              className={`rounded-xl border p-3.5 space-y-1 text-xs ${
+                healthPreview.reachable
+                  ? "border-emerald-500/35 bg-emerald-950/20"
+                  : "border-rose-500/35 bg-rose-950/20"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <p className="font-mono text-cyan-300">{healthPreview.baseUrl}</p>
+                <Badge tone={healthPreview.reachable ? "emerald" : "rose"}>
+                  {healthPreview.reachable ? "REACHABLE" : "UNREACHABLE"}
+                </Badge>
+              </div>
+              <p className="text-slate-200">{healthPreview.message}</p>
             </div>
           )}
         </Card>
@@ -396,11 +421,8 @@ function SettingsPage() {
             workspace.
           </p>
           <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3 text-[11px] text-slate-400 space-y-1">
-            <p>• Client-side simulation engine; no database or live LLM API required.</p>
-            <p>
-              • Evaluation figures and supply-chain stocks are clearly marked{" "}
-              <span className="text-amber-300 font-semibold">DEMO DATA</span>.
-            </p>
+            <p>• Connected to FastAPI + SQLite + Google Gemini API (key kept strictly in backend/.env).</p>
+            <p>• Role switching uses demo-level <code>X-User-Role</code> headers (not production auth).</p>
           </div>
         </Card>
       </div>

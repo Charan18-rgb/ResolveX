@@ -280,6 +280,7 @@ export interface AnalysisResult {
   interpretations: Interpretation[];
   clarificationQuestions: ClarificationQuestion[];
   defaultResolution: FinalResolution;
+  backendData?: BackendAnalyzeResponse | undefined;
 }
 
 export interface ExamplePrompt {
@@ -315,7 +316,7 @@ export type UserDemoRole = "Inventory Planner" | "Procurement Manager" | "Operat
 
 export interface AppSettings {
   apiBaseUrl: string;
-  integrationMode: "mock" | "fastapi-ready";
+  integrationMode: "live" | "mock";
   ambiguityThreshold: number;
   maxClarificationQuestions: number;
   defaultDomain: DomainContext;
@@ -497,6 +498,11 @@ export interface AssistantMessage {
   suggestedRoute?: string | undefined;
   suggestedLabel?: string | undefined;
   timestamp: string;
+  isError?: boolean | undefined;
+  conversationId?: string | undefined;
+  clarificationQuestions?: string[] | undefined;
+  interpretations?: BackendInterpretationItem[] | undefined;
+  inventoryInsight?: BackendInventoryInsight | null | undefined;
 }
 
 export interface NotificationItem {
@@ -526,8 +532,277 @@ export interface ResolveIntentRequest {
 
 export interface BackendHealthStatus {
   reachable: boolean;
-  mode: "mock" | "fastapi-ready";
+  mode: "live" | "mock";
   baseUrl: string;
   checkedAt: string;
   message: string;
+  database?: "connected" | "disconnected" | undefined;
+  aiConfigured?: boolean | undefined;
+  service?: string | undefined;
 }
+
+// ============================================================================
+// REAL FASTAPI BACKEND CONTRACTS (PS6 + PS2 + Evaluation)
+// ============================================================================
+
+export type BackendConversationStatus =
+  | "ANALYZING"
+  | "NEEDS_CLARIFICATION"
+  | "RESOLVED"
+  | "FAILED";
+
+export type BackendClassification =
+  | "clear"
+  | "ambiguous"
+  | "incomplete"
+  | "context_dependent";
+
+export interface BackendInterpretationItem {
+  label: string;
+  description: string;
+}
+
+export interface BackendResolvedIntentPayload {
+  action: string;
+  parameters: Record<string, unknown>;
+  resolved_instruction: string;
+  direct_answer?: string | null;
+}
+
+export interface BackendMaterialOverview {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  on_hand: number;
+  incoming: number;
+  allocated: number;
+  net_availability: number;
+  reorder_threshold: number;
+  stock_status: "HEALTHY" | "LOW_STOCK" | "OUT_OF_STOCK";
+  lead_time_days?: number | null;
+  supplier_name?: string | null;
+}
+
+export interface BackendInventoryOverviewResponse {
+  total_materials: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  materials: BackendMaterialOverview[];
+}
+
+export interface BackendMissingMaterialDetail {
+  material_id: string;
+  material_name: string;
+  required_qty: number;
+  allocated_qty: number;
+  shortage_qty: number;
+  expected_available_date?: string | null;
+}
+
+export interface BackendOrderRiskItem {
+  order_id: string;
+  customer_name: string;
+  product_code: string;
+  quantity: number;
+  customer_request_date: string;
+  status: string;
+  risk_category: "ON_TRACK" | "AT_RISK" | "DELAYED" | "BLOCKED";
+  projected_ship_date?: string | null;
+  ship_date_status: "CALCULATED" | "ESTIMATED" | "UNAVAILABLE";
+  missing_materials: BackendMissingMaterialDetail[];
+  explanation: string;
+  data_timestamp: string;
+}
+
+export interface BackendShortageItem {
+  material_id: string;
+  sku: string;
+  material_name: string;
+  unit: string;
+  on_hand: number;
+  incoming: number;
+  allocated: number;
+  net_availability: number;
+  unmet_order_demand: number;
+  reorder_threshold: number;
+  recommended_purchase_qty: number;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  lead_time_days?: number | null;
+  affected_orders: string[];
+}
+
+export interface BackendInventoryInsight {
+  domain: string;
+  intent_action: string;
+  inventory_overview: BackendInventoryOverviewResponse;
+  shortages: BackendShortageItem[];
+  order_risks: BackendOrderRiskItem[];
+  note: string;
+}
+
+export interface BackendAnalyzeResponse {
+  conversation_id: string;
+  status: BackendConversationStatus;
+  classification?: BackendClassification | null;
+  ambiguity_types: string[];
+  needs_clarification: boolean;
+  interpretations: BackendInterpretationItem[];
+  missing_required_info: string[];
+  clarification_questions: string[];
+  resolved_intent?: BackendResolvedIntentPayload | null;
+  inventory_insight?: BackendInventoryInsight | null;
+  turn_count: number;
+}
+
+export interface BackendConversationSummary {
+  id: string;
+  original_instruction: string;
+  initial_context?: string | null;
+  status: BackendConversationStatus;
+  classification?: BackendClassification | null;
+  turn_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendConversationDetail {
+  conversation: BackendConversationSummary;
+  messages: Array<{
+    role: string;
+    content: string;
+    turn_number: number;
+    created_at: string;
+  }>;
+  clarification_questions: Array<{
+    question_text: string;
+    answered: number;
+    turn_number: number;
+  }>;
+  resolved_intent?: {
+    action: string;
+    parameters: Record<string, unknown>;
+    resolved_instruction: string;
+    direct_answer?: string | null;
+  } | null;
+}
+
+export interface BackendOrderRow {
+  id: string;
+  customer_name: string;
+  product_code: string;
+  quantity: number;
+  customer_request_date: string;
+  processing_days: number;
+  status: string;
+  risk_category?: string | null;
+  projected_ship_date?: string | null;
+  risk_explanation?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendAllocationRecord {
+  order_id: string;
+  material_id: string;
+  required_qty: number;
+  allocated_qty: number;
+  priority_reason: string;
+  updated_at: string;
+}
+
+export interface BackendPurchaseOrderProposal {
+  id: string;
+  material_id: string;
+  material_name: string;
+  suggested_quantity: number;
+  supplier_id?: string | null;
+  supplier_name?: string | null;
+  reason: string;
+  affected_orders: string[];
+  expected_shortage_date?: string | null;
+  estimated_impact: string;
+  supporting_data: Record<string, unknown>;
+  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+  supplier_email_draft?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BackendAlertItem {
+  id: number;
+  alert_type: "STOCK_OUT" | "CRD_RISK" | "FEED_FAILURE" | "LOW_STOCK";
+  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  entity_id: string;
+  message: string;
+  acknowledged: boolean;
+  created_at: string;
+}
+
+export interface BackendBriefingResponse {
+  role: string;
+  sections: Array<{
+    section: string;
+    data: Record<string, unknown>;
+  }>;
+  data_source: string;
+  ai_enriched: boolean;
+  ai_summary?: string | null;
+  ai_note?: string | null;
+}
+
+export interface BackendEventIngestionResponse {
+  event_id: string;
+  status: "PROCESSED" | "DUPLICATE" | "MALFORMED";
+  message: string;
+  simulated: boolean;
+}
+
+export interface BackendInventoryEvent {
+  id: number;
+  event_id: string;
+  event_type: string;
+  entity_ref: string;
+  payload_json: string;
+  status: string;
+  error_message?: string | null;
+  simulated: number;
+  created_at: string;
+}
+
+export interface BackendPs2Evaluation {
+  run_id: string;
+  total_scenarios: number;
+  passed: number;
+  failed: number;
+  accuracy: number;
+  baseline_accuracy: number;
+  improvement_over_baseline: number;
+  shortages_detected: number;
+  crd_risk_orders_evaluated: number;
+  results_detail: Array<Record<string, unknown>>;
+  note: string;
+}
+
+export interface BackendPs6Evaluation {
+  run_id: string;
+  model: string;
+  dataset_size: number;
+  precision: number;
+  recall: number;
+  f1_score: number;
+  resolution_accuracy: number;
+  false_clarification_rate: number;
+  true_positives?: number;
+  true_negatives?: number;
+  false_positives?: number;
+  false_negatives?: number;
+  created_at?: string;
+}
+
+export type BackendApiRoleHeader =
+  | "ADMIN"
+  | "INVENTORY_PLANNER"
+  | "PROCUREMENT_MANAGER"
+  | "OPERATIONS_MANAGER";

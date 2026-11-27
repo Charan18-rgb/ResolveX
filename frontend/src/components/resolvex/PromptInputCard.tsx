@@ -117,7 +117,7 @@ export function PromptInputCard({
                   </select>
                 </div>
               )}
-              <Badge tone="cyan">DEMO ENGINE</Badge>
+              <Badge tone="cyan">PS6 + PS2 ENGINE</Badge>
             </div>
           </div>
 
