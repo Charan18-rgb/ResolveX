@@ -636,7 +636,11 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
             db, conv_id, role="assistant",
             content=str(card.get("summary") or card.get("title") or ""), turn_number=turn,
         )
-        db_ops.update_conversation_state(db, conv_id, status="RESOLVED", turn_count=turn + 1)
+        # Preserve the conversation's existing status — an NLU conversation may
+        # legitimately be NEEDS_CLARIFICATION and must not be flipped to RESOLVED.
+        db_ops.update_conversation_state(
+            db, conv_id, status=str((conv or {}).get("status") or "RESOLVED"), turn_count=turn + 1
+        )
         if (
             card.get("card_type") == "message_draft"
             and isinstance(card.get("data"), dict)

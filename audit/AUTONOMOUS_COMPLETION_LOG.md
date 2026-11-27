@@ -49,3 +49,7 @@ Session start state: HEAD `2bbff1d` (pushed, remote verified), clean tree, backe
 - Dialogs: native prompt()/confirm() replaced by `ConversationDialogs.tsx` (rename + delete) with Escape/overlay close, Enter submit, busy/error states, mobile-friendly.
 - Tests: backend pytest 72/72, Vitest 32/32, tsc 0 errors, production build pass. NLU multi-turn smoke verified live (analyze→clarify→clarify→RESOLVED).
 - Gmail: still NOT CONNECTED (verified /api/email/status configured:false). Draft-only preserved.
+
+## Phase 3b — fix: ops turns must not flip NLU conversation status
+
+- Bug: ops persistence wrapper called update_conversation_state(status="RESOLVED") on whatever conversation_id was passed — an NLU conversation in NEEDS_CLARIFICATION would be corrupted. Verified live before fix path existed; fixed by preserving conv.status. Re-verified: ops query against NEEDS_CLARIFICATION conv leaves status intact, messages append correctly. test_ops_query 12/12.
