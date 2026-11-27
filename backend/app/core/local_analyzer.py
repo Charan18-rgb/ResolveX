@@ -411,8 +411,32 @@ def _unsupported(text: str) -> LocalMatch | None:
     )
 
 
+def _percent_of(text: str) -> LocalMatch | None:
+    match = re.search(
+        r"([0-9]+(?:\.[0-9]+)?)\s*(?:%|percent|per\s*cent)\s+of\s+([0-9]+(?:\.[0-9]+)?)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    pct, base = float(match.group(1)), float(match.group(2))
+    result = round(pct / 100 * base, 4)
+    answer = f"{pct:g}% of {base:g} = {result:g}."
+    return LocalMatch(
+        _clear(
+            "calculate",
+            f"Calculate {pct:g}% of {base:g}.",
+            {"percent": f"{pct:g}", "base": f"{base:g}", "result": f"{result:g}"},
+            answer,
+            "Closed-world arithmetic. No clarification required.",
+        ),
+        True,
+    )
+
+
 _INTENT_FINDERS = (
     ("unit_conversion", _unit_conversion),
+    ("percent_of", _percent_of),
     ("unsupported_request", _unsupported),
     ("communication", _communication),
     ("inventory_lookup", _inventory_query),
