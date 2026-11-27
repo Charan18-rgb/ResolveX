@@ -325,10 +325,15 @@ def _resolve_status_and_intent(
     if analysis.resolved_intent is not None:
         valid, reason = validate_resolved_intent(analysis.resolved_intent)
         if valid:
+            params_dict = (
+                analysis.resolved_intent.parameters_dict()
+                if hasattr(analysis.resolved_intent, "parameters_dict")
+                else dict(analysis.resolved_intent.parameters)
+            )
             _save_intent(db_path, conversation_id, analysis.resolved_intent)
             return "RESOLVED", ResolvedIntentPayload(
                 action=analysis.resolved_intent.action,
-                parameters=analysis.resolved_intent.parameters,
+                parameters=params_dict,
                 resolved_instruction=analysis.resolved_intent.resolved_instruction,
                 direct_answer=analysis.resolved_intent.direct_answer,
             )
@@ -339,7 +344,7 @@ def _resolve_status_and_intent(
         _save_intent(db_path, conversation_id, fallback)
         return "RESOLVED", ResolvedIntentPayload(
             action=fallback.action,
-            parameters=fallback.parameters,
+            parameters=fallback.parameters_dict(),
             resolved_instruction=fallback.resolved_instruction,
             direct_answer=fallback.direct_answer,
         )
@@ -357,7 +362,7 @@ def _resolve_status_and_intent(
         _save_intent(db_path, conversation_id, auto_intent)
         return "RESOLVED", ResolvedIntentPayload(
             action=auto_intent.action,
-            parameters=auto_intent.parameters,
+            parameters=auto_intent.parameters_dict(),
             resolved_instruction=auto_intent.resolved_instruction,
             direct_answer=auto_intent.direct_answer,
         )
@@ -366,11 +371,16 @@ def _resolve_status_and_intent(
 
 
 def _save_intent(db_path: str, conversation_id: str, intent: Any) -> None:
+    params_dict = (
+        intent.parameters_dict()
+        if hasattr(intent, "parameters_dict")
+        else dict(intent.parameters)
+    )
     db_ops.save_resolved_intent(
         db_path,
         conversation_id,
         action=intent.action,
-        parameters=intent.parameters,
+        parameters=params_dict,
         resolved_instruction=intent.resolved_instruction,
         direct_answer=intent.direct_answer,
     )

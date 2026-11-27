@@ -45,8 +45,13 @@ def classify_intent_domain(resolved_intent: ResolvedIntentOutput) -> str:
             return "inventory"
 
     # Check parameter keys
-    for key in resolved_intent.parameters:
-        if any(kw in key.lower() for kw in _INVENTORY_ACTION_KEYWORDS):
+    params = (
+        resolved_intent.parameters_dict()
+        if hasattr(resolved_intent, "parameters_dict")
+        else resolved_intent.parameters
+    )
+    for key in params:
+        if any(kw in str(key).lower() for kw in _INVENTORY_ACTION_KEYWORDS):
             return "inventory"
 
     return "general"

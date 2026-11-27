@@ -16,18 +16,24 @@ from app.config import get_settings
 T = TypeVar("T", bound=BaseModel)
 
 _client: Optional[genai.Client] = None
+_client_config: Optional[tuple[str, int]] = None
 
 
 def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        settings = get_settings()
-        api_key = settings.gemini_api_key.strip()
-        if not api_key or api_key == "your_gemini_api_key_here":
-            raise RuntimeError(
-                "GEMINI_API_KEY is not configured. Set it in backend/.env to enable AI features."
-            )
-        _client = genai.Client(api_key=api_key)
+    global _client, _client_config
+    settings = get_settings()
+    api_key = settings.gemini_api_key.strip()
+    if not api_key or api_key == "your_gemini_api_key_here":
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured. Set it in backend/.env to enable AI features."
+        )
+    desired_config = (api_key, settings.gemini_timeout_seconds)
+    if _client is None or _client_config != desired_config:
+        _client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=settings.gemini_timeout_seconds * 1000),
+        )
+        _client_config = desired_config
     return _client
 
 
