@@ -59,7 +59,7 @@ export function ConfidenceUncertaintyPanel({
 
   const provenanceBadge =
     assessment.provenance === "live_backend"
-      ? { label: "Live FastAPI Backend Calibration", tone: "emerald" as const }
+      ? { label: "Live Backend Calibration", tone: "emerald" as const }
       : assessment.provenance === "ai_unavailable_abstained"
         ? { label: "Backend AI Unavailable — Abstained", tone: "rose" as const }
         : {

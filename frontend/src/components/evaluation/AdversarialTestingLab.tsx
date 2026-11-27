@@ -64,7 +64,7 @@ const TAG_OPTIONS: Array<{ id: AdversarialChallengeTag | "all"; label: string }>
   { id: "missing_context", label: "Missing Context" },
   { id: "contradictory", label: "Contradictory" },
   { id: "multi_turn", label: "Multi-Turn" },
-  { id: "ps2_inventory", label: "PS2 Inventory Bridge" },
+  { id: "ps2_inventory", label: "Inventory Scenarios" },
   { id: "multilingual", label: "Code-Mixed / Multilingual" },
   { id: "clear_control", label: "Clear Controls" },
 ];
@@ -79,7 +79,7 @@ const DOMAINS: DomainContext[] = [
 ];
 
 const PROVENANCE_BADGE: Record<AdversarialRunProvenance, { label: string; tone: BadgeTone }> = {
-  live_backend_evaluated: { label: "Live FastAPI Backend Measured", tone: "emerald" },
+  live_backend_evaluated: { label: "Live Backend Measured", tone: "emerald" },
   ai_fallback_mixed: { label: "Backend Fallback / Error (Not Live AI)", tone: "rose" },
   client_simulation_evaluated: {
     label: "Client Simulator (Not Live Backend Model)",
@@ -295,13 +295,13 @@ export function AdversarialTestingLab() {
       });
       setRunStatusBanner(
         entry.provenance === "ai_fallback_mixed"
-          ? `Backend /api/evaluation/ps6 ran ${entry.executedCount} adversarial cases, but AI fallback occurred on ${resp.evaluation?.fallback_cases_count ?? entry.executedCount} cases.`
-          : `Backend /api/evaluation/ps6 measured ${entry.executedCount} adversarial cases cleanly (F1: ${formatPct(entry.resolveXMetrics.f1Score)}).`,
+          ? `The backend language evaluation ran ${entry.executedCount} adversarial cases, but AI fallback occurred on ${resp.evaluation?.fallback_cases_count ?? entry.executedCount} cases.`
+          : `The backend language evaluation measured ${entry.executedCount} adversarial cases cleanly (F1: ${formatPct(entry.resolveXMetrics.f1Score)}).`,
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Backend request failed";
       setRunStatusBanner(
-        `Unable to reach ${settings.apiBaseUrl}/api/evaluation/ps6 (${msg}). Switch to Live FastAPI Backend in Settings when FastAPI is running, or run cases locally under explicit Client Simulator mode.`,
+        `Unable to reach the backend evaluation service (${msg}). Switch to Live Backend mode in Settings when the backend is running, or run cases locally under explicit Local Simulator mode.`,
       );
     } finally {
       setIsRunning(false);
@@ -433,7 +433,7 @@ export function AdversarialTestingLab() {
             <p className="text-xs text-slate-400 max-w-3xl leading-relaxed">
               Stress-test ResolveX on lexical, referential, structural, contextual, semantic, and
               underspecified prompts, long multi-ambiguity sentences, missing context,
-              contradictions, and multi-turn PS6+PS2 scenarios. Metrics update strictly from
+              contradictions, and multi-turn language and inventory scenarios. Metrics update strictly from
               executed tests — never fabricated or pre-marked passing.
             </p>
           </div>
@@ -468,7 +468,7 @@ export function AdversarialTestingLab() {
               isLoading={isRunning}
               onClick={() => void handleRunBackendPs6Endpoint()}
             >
-              Run Backend /api/evaluation/ps6
+              Run Backend Language Evaluation
             </Button>
             {executedResultsList.length > 0 && (
               <Button

@@ -671,7 +671,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
           } catch (err) {
             const msg = err instanceof Error ? err.message : "Backend request failed";
             setLiveBackendNotice(
-              `FastAPI backend (${settings.apiBaseUrl}) unreachable: ${msg}. Showing local Client Simulation (DEMO DATA — NOT live model output).`,
+              `Backend service (${settings.apiBaseUrl}) unreachable: ${msg}. Showing local simulation (DEMO DATA — not live model output).`,
             );
             const rawLocal = await resolveXService.analyzePrompt({
               prompt: targetPrompt,
@@ -962,7 +962,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
           .catch((err) => {
             const msg = err instanceof Error ? err.message : "Backend clarification sync failed";
             setLiveBackendNotice(
-              `FastAPI clarification sync unavailable (${msg}). Using local client simulation.`,
+              `Backend clarification sync unavailable (${msg}). Using local client simulation.`,
             );
           });
       }

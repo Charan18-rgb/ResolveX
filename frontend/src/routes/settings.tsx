@@ -85,7 +85,7 @@ function SettingsPage() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 space-y-8">
       <SectionHeader
         eyebrow="Configuration"
-        title="Settings, Demo Role & FastAPI Readiness"
+        title="Settings, Demo Role & Backend Connection"
         description="Configure detection defaults, active workspace role, motion preferences, and backend API connection."
         actions={
           <Button
@@ -114,7 +114,7 @@ function SettingsPage() {
               <h3 className="text-base font-semibold text-white">API Endpoint Configuration</h3>
             </div>
             <Badge tone={settings.integrationMode === "live" ? "emerald" : "amber"}>
-              {settings.integrationMode === "live" ? "Live FastAPI Backend" : "Local Mock Mode"}
+              {settings.integrationMode === "live" ? "Live Backend" : "Local Simulation"}
             </Badge>
           </div>
 
@@ -147,7 +147,7 @@ function SettingsPage() {
               <div className="grid grid-cols-2 gap-2.5">
                 {(
                   [
-                    { id: "live", label: "Live FastAPI + Gemini" },
+                    { id: "live", label: "Live Backend + AI Engine" },
                     { id: "mock", label: "Local Simulation (DEMO DATA)" },
                   ] as const
                 ).map((mode) => (
@@ -420,12 +420,11 @@ function SettingsPage() {
           </p>
           <div className="rounded-xl border border-white/10 bg-[#050814]/80 p-3 text-[11px] text-slate-400 space-y-1">
             <p>
-              • Connected to FastAPI + SQLite + Google Gemini API (key kept strictly in
-              backend/.env).
+              • Connected to the ResolveX backend service and AI engine; credentials stay
+              server-side and are never exposed to the browser.
             </p>
             <p>
-              • Role switching uses demo-level <code>X-User-Role</code> headers (not production
-              auth).
+              • Role switching is demo-level only and is not production authentication.
             </p>
           </div>
         </Card>

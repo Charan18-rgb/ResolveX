@@ -199,7 +199,7 @@ export const ADVERSARIAL_BENCHMARK_CASES: AdversarialTestCase[] = [
   },
   {
     id: "adv-ps2-001",
-    title: "PS2 Inventory & CRD Allocation Ambiguity",
+    title: "Inventory & CRD Allocation Ambiguity",
     instruction:
       "Reallocate remaining chip stock to the urgent customer order and draft a purchase order soon.",
     domain: "Supply Chain & Inventory",
@@ -215,7 +215,7 @@ export const ADVERSARIAL_BENCHMARK_CASES: AdversarialTestCase[] = [
     ],
     followUpClarification:
       "Prioritize MAT-CHIP for ORD-1002 and draft PO for 500 units from Alpha Semiconductors today.",
-    notes: "Tests PS6 NLU disambiguation bridging directly into PS2 inventory replenishment.",
+    notes: "Tests language disambiguation bridging directly into inventory replenishment.",
   },
   {
     id: "adv-lang-001",
@@ -251,7 +251,7 @@ export const ADVERSARIAL_BENCHMARK_CASES: AdversarialTestCase[] = [
   },
   {
     id: "adv-clr-001",
-    title: "Clear Control — Long Unambiguous PS2 Command",
+    title: "Clear Control — Long Unambiguous Inventory Command",
     instruction:
       "Export read-only CSV metrics for ORD-1001 and MAT-CHIP from warehouse BLR-Hub-01 on 2026-11-27 to analytics@acme.com without mutating allocations.",
     domain: "Supply Chain & Inventory",
@@ -805,8 +805,8 @@ export function mapBackendEvalToAdversarialHistory(
     timestamp: ev.executed_at ?? new Date().toISOString(),
     provenance: prov,
     scopeLabel: ev.adversarial_only
-      ? `Backend /api/evaluation/ps6 Adversarial Suite (${ev.dataset_size} cases)`
-      : `Backend /api/evaluation/ps6 Full Benchmark (${ev.dataset_size} cases)`,
+      ? `Backend Language Evaluation — Adversarial Suite (${ev.dataset_size} cases)`
+      : `Backend Language Evaluation — Full Benchmark (${ev.dataset_size} cases)`,
     executedCount: ev.dataset_size,
     groundedCount: ev.dataset_size,
     resolveXMetrics: {
