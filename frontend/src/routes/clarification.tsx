@@ -480,7 +480,6 @@ function ClarificationPage() {
                       <Button type="submit" variant="secondary" isLoading={isSubmittingClarification}>
                         {isSubmittingClarification ? "Sending..." : "Submit Clarification"}
                       </Button>
-                      </Button>
                     </div>
                     {customError && (
                       <div role="alert" className="flex items-center gap-1.5 text-xs text-rose-300">

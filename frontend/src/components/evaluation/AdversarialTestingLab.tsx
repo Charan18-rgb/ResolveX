@@ -154,7 +154,7 @@ export function AdversarialTestingLab() {
 
   const overallProvenance: AdversarialRunProvenance = useMemo(() => {
     if (executedResultsList.length === 0) {
-      return settings.integrationMode === "fastapi-ready"
+      return settings.integrationMode === "live"
         ? "live_backend_evaluated"
         : "client_simulation_evaluated";
     }
@@ -172,7 +172,7 @@ export function AdversarialTestingLab() {
 
   const executeSingleCase = async (tc: AdversarialTestCase) => {
     return runAdversarialTestCase(tc, {
-      mode: settings.integrationMode,
+      mode: settings.integrationMode === "live" ? "fastapi-ready" : "mock",
       apiBaseUrl: settings.apiBaseUrl,
       analyzeLive: async (instruction, domain) => {
         const { raw } = await resolveXService.analyzePromptLive(settings.apiBaseUrl, {
@@ -546,8 +546,8 @@ export function AdversarialTestingLab() {
               <PlusCircle className="h-4 w-4 text-violet-400" />
               <h3 className="text-base font-semibold text-white">Submit Custom Judge Test</h3>
             </div>
-            <Badge tone={settings.integrationMode === "fastapi-ready" ? "emerald" : "amber"}>
-              {settings.integrationMode === "fastapi-ready" ? "Live API" : "Local Simulator"}
+            <Badge tone={settings.integrationMode === "live" ? "emerald" : "amber"}>
+              {settings.integrationMode === "live" ? "Live API" : "Local Simulator"}
             </Badge>
           </div>
 

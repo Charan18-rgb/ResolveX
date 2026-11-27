@@ -836,7 +836,8 @@ export function enrichInterpretationsWithConfidence(
     }
 
     const boost = matchedClarify.length * 0.14;
-    const raw = (interp.probability / 100) * 0.85 + boost;
+    const baseProbability = typeof interp.probability === "number" ? interp.probability : 50;
+    const raw = (baseProbability / 100) * 0.85 + boost;
     const calibrated = Number(clamp(raw, 0.08, 0.94).toFixed(4));
 
     return {

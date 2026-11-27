@@ -463,7 +463,7 @@ export interface AnalysisResult {
   backendConversationId?: string | undefined;
   backendStatus?: "ANALYZING" | "NEEDS_CLARIFICATION" | "RESOLVED" | "FAILED" | undefined;
   confidenceAssessment?: ConfidenceAssessment | undefined;
-  backendInventoryInsight?: Record<string, unknown> | null | undefined;
+  backendInventoryInsight?: BackendInventoryInsight | Record<string, unknown> | null | undefined;
   contextMemory?: SessionContextMemory | undefined;
   riskAssessment?: IntentRiskAssessment | undefined;
 }
@@ -795,37 +795,6 @@ export interface BackendConfidenceHistoryDTO {
   evidence_count_contradicting: number;
 }
 
-export interface BackendAnalyzeResponse {
-  conversation_id: string;
-  status: "ANALYZING" | "NEEDS_CLARIFICATION" | "RESOLVED" | "FAILED";
-  classification: "clear" | "ambiguous" | "incomplete" | "context_dependent" | null;
-  ambiguity_types: string[];
-  needs_clarification: boolean;
-  interpretations: Array<{
-    label: string;
-    description: string;
-    confidence_score?: number | null | undefined;
-    confidence_status?: "calibrated" | "abstained" | undefined;
-    supporting_signals?: string[] | undefined;
-    contradicting_signals?: string[] | undefined;
-    missing_requirements?: string[] | undefined;
-  }>;
-  missing_required_info: string[];
-  clarification_questions: string[];
-  resolved_intent: {
-    action: string;
-    parameters: Record<string, unknown>;
-    resolved_instruction: string;
-    direct_answer?: string | null | undefined;
-  } | null;
-  inventory_insight?: Record<string, unknown> | null | undefined;
-  turn_count: number;
-  confidence_assessment?: BackendConfidenceAssessmentDTO | null | undefined;
-  confidence_history?: BackendConfidenceHistoryDTO[] | undefined;
-  context_memory?: BackendContextMemoryDTO | null | undefined;
-  risk_assessment?: BackendRiskAssessmentDTO | null | undefined;
-}
-
 // --- FEATURE 8: CONTEXT MEMORY & CONVERSATION INTELLIGENCE ---
 
 export type MemoryEntityCategory = "person" | "object" | "date" | "action" | "reference";
@@ -1081,6 +1050,12 @@ export type BackendClassification = "clear" | "ambiguous" | "incomplete" | "cont
 export interface BackendInterpretationItem {
   label: string;
   description: string;
+  confidence_score?: number | null;
+  confidence_status?: "calibrated" | "abstained";
+  supporting_signals?: string[];
+  contradicting_signals?: string[];
+  missing_requirements?: string[];
+  risk_level?: "Low" | "Medium" | "High" | null;
 }
 
 export interface BackendResolvedIntentPayload {
@@ -1176,6 +1151,10 @@ export interface BackendAnalyzeResponse {
   inventory_insight?: BackendInventoryInsight | null;
   turn_count: number;
   analysis_source?: "gemini" | "local" | "offline_fallback" | "system" | null;
+  confidence_assessment?: BackendConfidenceAssessmentDTO | null;
+  confidence_history?: BackendConfidenceHistoryDTO[];
+  context_memory?: BackendContextMemoryDTO | null;
+  risk_assessment?: BackendRiskAssessmentDTO | null;
 }
 
 export interface BackendConversationSummary {

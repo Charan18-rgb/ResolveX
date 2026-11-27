@@ -574,6 +574,25 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const runSimulatedStageProgress = useCallback(async () => {
+    const stages = [
+      "Understanding input & script",
+      "Analyzing context & entities",
+      "Detecting ambiguity spans",
+      "Generating interpretations",
+    ];
+    if (settings.integrationMode === "live" || settings.reduceMotion) {
+      setAnalysisStage(stages.length);
+      setAnalysisStageLabel(stages[stages.length - 1] ?? "");
+      return;
+    }
+    for (let i = 0; i < stages.length; i += 1) {
+      setAnalysisStage(i + 1);
+      setAnalysisStageLabel(stages[i] ?? "");
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }, [settings.integrationMode, settings.reduceMotion]);
+
   const runAnalysis = useCallback(
     async (
       customPrompt?: string,
@@ -628,7 +647,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
         const serializedContext = serializeSessionMemoryForContext(nextSessionMem);
         let result: AnalysisResult;
 
-        if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+        if (settings.integrationMode === "live") {
           try {
             const contextStr = serializedContext
               ? `Domain: ${targetDomain} | Strictness: ${targetStrictness} | Language: ${language} | Prior Session Memory: ${serializedContext}`
@@ -715,7 +734,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       if (!found) return activeAnalysis;
       setPromptInput(found.prompt);
       setDomain(found.domain);
-      if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+      if (settings.integrationMode === "live") {
         return runAnalysis(found.prompt, found.domain, strictness);
       }
       setIsAnalyzing(true);
@@ -749,7 +768,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       if (!sample) return activeAnalysis;
       setPromptInput(sample.prompt);
       setDomain(sample.domain);
-      if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+      if (settings.integrationMode === "live") {
         return runAnalysis(sample.prompt, sample.domain, strictness);
       }
       setIsAnalyzing(true);
@@ -923,7 +942,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       });
 
       // When connected to live FastAPI backend, synchronize clarification turn & real confidence history
-      if (settings.integrationMode === "fastapi-ready" && activeAnalysis.backendConversationId) {
+      if (settings.integrationMode === "live" && activeAnalysis.backendConversationId) {
         void resolveXService
           .clarifyBackendTurn(
             settings.apiBaseUrl,
@@ -991,7 +1010,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
 
   const generateFinalResolution = useCallback(async (): Promise<FinalResolution> => {
     if (
-      (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") &&
+      (settings.integrationMode === "live") &&
       activeAnalysis.backendData &&
       !activeAnalysis.isDemoData
     ) {
@@ -1064,7 +1083,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
       setContinueInSession(false);
 
       try {
-        if (settings.integrationMode === "live" || settings.integrationMode === "fastapi-ready") {
+        if (settings.integrationMode === "live") {
           try {
             const detail = await resolveXService.getConversationDetail(
               item.id,

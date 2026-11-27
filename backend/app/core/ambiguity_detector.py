@@ -47,16 +47,15 @@ def detect_ambiguity_with_status(
     Classify and analyse the instruction.
     Returns (analysis_output, is_ai_fallback, fallback_error_message, analysis_source).
     """
-    local = _prefer_local(instruction, context_summary)
-    if local is not None:
-        return local, True, "Deterministic local resolver active.", "local"
-
     prompt = build_analysis_prompt(instruction, context_summary)
     result, error = gemini_service.call_gemini_structured(
         prompt, GeminiAnalysisOutput
     )
 
     if error or result is None:
+        local = _prefer_local(instruction, context_summary)
+        if local is not None:
+            return local, True, error or "Deterministic local resolver active.", "local"
         matched = match_local(instruction, context_summary)
         if matched is not None:
             return matched.analysis, True, error or "Deterministic local resolver active.", "local"
