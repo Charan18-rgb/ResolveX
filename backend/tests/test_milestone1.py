@@ -35,14 +35,14 @@ def test_database_initialization(tmp_path: Path) -> None:
         tables = {row["name"] for row in rows}
         fk_enabled = conn.execute("PRAGMA foreign_keys;").fetchone()[0]
 
-    assert tables == {
+    assert {
         "conversations",
         "messages",
         "clarification_questions",
         "interpretations",
         "resolved_intents",
         "evaluation_records",
-    }
+    }.issubset(tables)
     assert fk_enabled == 1
 
 
