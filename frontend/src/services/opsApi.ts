@@ -78,4 +78,11 @@ export const opsApi = {
   orderTimeline: (orderId: string, b?: string) => req<OrderTimeline>(`/api/orders/${encodeURIComponent(orderId)}/timeline`, undefined, b),
   query: (question: string, b?: string, context?: Record<string, any>) =>
     req<OpsCard>("/api/ops/query", { method: "POST", body: JSON.stringify({ question, context: context ?? null }) }, b),
+  emailStatus: (b?: string) => req<{ connected: boolean; sender?: string | null; note?: string }>("/api/email/status", undefined, b),
+  sendEmail: (payload: { to: string; subject: string; body: string }, b?: string) =>
+    req<{ sent: boolean; message_id?: string }>(
+      "/api/email/send",
+      { method: "POST", body: JSON.stringify({ ...payload, confirm: true }) },
+      b,
+    ),
 };

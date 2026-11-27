@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # Conversation limits
     max_clarification_turns: int = Field(default=3, ge=1, le=10)
 
+    # Gmail integration (optional — email stays draft-only until configured)
+    google_client_id: str = Field(default="")
+    google_client_secret: str = Field(default="")
+    google_redirect_uri: str = Field(default="http://localhost:8000/api/email/oauth/callback")
+    gmail_sender: str = Field(default="")
+    gmail_refresh_token: str = Field(default="")
+
     # CORS origins (comma-separated string in .env)
     allowed_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"

@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Sheet, FileSpreadsheet, Building2, Truck, Calculator, PlugZap,
-  CheckCircle2, AlertCircle, Clock,
+  CheckCircle2, AlertCircle, Clock, Mail,
 } from "lucide-react";
+import { opsApi } from "@/services/opsApi";
 
 export const Route = createFileRoute("/integrations")({ component: IntegrationsPage });
 
@@ -88,6 +89,11 @@ const STATUS_META: Record<ConnStatus, { label: string; cls: string; icon: typeof
 
 function IntegrationsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{ connected: boolean; sender?: string | null; note?: string } | null>(null);
+
+  useEffect(() => {
+    opsApi.emailStatus().then(setEmailStatus).catch(() => setEmailStatus({ connected: false }));
+  }, []);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -112,6 +118,31 @@ function IntegrationsPage() {
             can only invoke connectors that are implemented and authenticated — nothing runs on unverified data.
           </div>
         </div>
+      </div>
+
+      {/* Gmail — live status from the backend email service */}
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-600"><Mail size={20} /></div>
+            <div>
+              <h3 className="font-semibold text-slate-900">Email — Gmail</h3>
+              <p className="text-xs text-slate-500">
+                Send drafted emails through your own Gmail account via OAuth 2.0. Passwords are never requested or stored; tokens stay server-side.
+              </p>
+            </div>
+          </div>
+          <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+            emailStatus?.connected ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+          }`}>
+            {emailStatus?.connected ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+            {emailStatus?.connected ? `Connected${emailStatus.sender ? ` — ${emailStatus.sender}` : ""}` : "Connection required"}
+          </span>
+        </div>
+        <p className="mt-3 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+          {emailStatus?.note ?? "Checking connection status…"}
+          {" "}To enable: create OAuth credentials in Google Cloud, grant the gmail.send scope, and set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GMAIL_SENDER and GMAIL_REFRESH_TOKEN in backend/.env. Every send requires explicit confirmation and reports the provider's real result.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

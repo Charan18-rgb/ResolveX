@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.alerts_routes import alerts_router
 from app.api.analysis_routes import analysis_router
+from app.api.email_routes import email_router
 from app.api.evaluation_routes import evaluation_router
 from app.api.inventory_routes import inventory_router
 from app.api.ops_routes import ops_router
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     app.include_router(procurement_router)
     app.include_router(alerts_router)
     app.include_router(ops_router)
+    app.include_router(email_router)
     app.include_router(evaluation_router)
     return app
 

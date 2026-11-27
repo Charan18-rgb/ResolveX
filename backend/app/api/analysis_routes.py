@@ -85,6 +85,42 @@ def resolve(
         raise HTTPException(status_code=500, detail="Resolution fetch failed. Please try again.")
 
 
+@analysis_router.delete("/conversations/{conversation_id}")
+def delete_conversation(
+    conversation_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Delete a conversation and all of its messages, questions and intents."""
+    try:
+        deleted = db_ops.delete_conversation(settings.database_path, conversation_id)
+    except Exception:
+        logger.exception("Delete conversation failed for %s", conversation_id)
+        raise HTTPException(status_code=500, detail="Delete failed. Please try again.")
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"deleted": True, "conversation_id": conversation_id}
+
+
+@analysis_router.patch("/conversations/{conversation_id}")
+def rename_conversation(
+    conversation_id: str,
+    body: dict,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Rename a conversation's displayed title."""
+    title = str(body.get("title", "")).strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required.")
+    try:
+        renamed = db_ops.rename_conversation(settings.database_path, conversation_id, title)
+    except Exception:
+        logger.exception("Rename conversation failed for %s", conversation_id)
+        raise HTTPException(status_code=500, detail="Rename failed. Please try again.")
+    if not renamed:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return {"renamed": True, "conversation_id": conversation_id, "title": title[:200]}
+
+
 @analysis_router.get("/conversations")
 def list_conversations(
     conversation_id: Optional[str] = Query(default=None, description="Fetch a single conversation by ID"),

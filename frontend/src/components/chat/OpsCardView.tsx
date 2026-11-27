@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Box } from "lucide-react";
-import type { OpsCard } from "../../services/opsApi";
+import { Box, Send } from "lucide-react";
+import { opsApi, type OpsCard } from "../../services/opsApi";
 import type { SupplierPerf, SupplierDetail, StorageBin, WarehouseOverview, OrderTimeline } from "../../services/opsApi";
 
 const CARD_CLS = "rounded-xl border border-slate-200 bg-white p-4 shadow-sm";
@@ -247,10 +247,34 @@ function DeliveriesCard({ data }: { data: any }) {
 
 function MessageDraftCard({ data, summary }: { data: any; summary?: string | undefined }) {
   const draft = data ?? {};
+  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const canSend = Boolean(draft.can_email_send) && typeof draft.recipient === "string" && draft.recipient.includes("@");
+  const send = async () => {
+    if (!window.confirm(`Send this email to ${draft.recipient}?`)) return;
+    setSendState("sending");
+    setSendError(null);
+    try {
+      const res = await opsApi.sendEmail({
+        to: String(draft.recipient),
+        subject: String(draft.subject ?? ""),
+        body: String(draft.body ?? ""),
+      });
+      setSendState(res.sent ? "sent" : "failed");
+      if (!res.sent) setSendError("The provider did not confirm sending.");
+    } catch (err) {
+      setSendState("failed");
+      setSendError(err instanceof Error ? err.message : "Send failed.");
+    }
+  };
+
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
-        <span className="rounded bg-amber-50 px-2 py-0.5 font-semibold text-amber-700">DRAFT ONLY — NOT SENT</span>
+        <span className={`rounded px-2 py-0.5 font-semibold ${sendState === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {sendState === "sent" ? "SENT" : "DRAFT ONLY — NOT SENT"}
+        </span>
         {draft.recipient_confirmed === false && <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-600">Confirm recipient</span>}
       </div>
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -258,6 +282,17 @@ function MessageDraftCard({ data, summary }: { data: any; summary?: string | und
         <div className="text-xs text-slate-500">Subject: <span className="font-medium text-slate-800">{String(draft.subject ?? "—")}</span></div>
         <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-800">{String(draft.body ?? "")}</pre>
       </div>
+      {canSend && sendState !== "sent" && (
+        <button
+          onClick={() => void send()}
+          disabled={sendState === "sending"}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
+        >
+          {sendState === "sending" ? "Sending…" : <><Send size={12} /> Send email</>}
+        </button>
+      )}
+      {sendState === "sent" && <p className="mt-2 text-xs font-medium text-emerald-700">Email accepted by Gmail.</p>}
+      {sendState === "failed" && <p className="mt-2 text-xs font-medium text-rose-600">{sendError ?? "Send failed."}</p>}
       {summary && <p className="mt-2 text-xs text-slate-500">{summary}</p>}
     </div>
   );

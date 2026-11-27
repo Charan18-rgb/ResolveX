@@ -614,6 +614,22 @@ export const resolveXService = {
     );
   },
 
+  async deleteConversation(conversationId: string, baseUrl?: string): Promise<void> {
+    await requestFastApi<unknown>(
+      baseUrl,
+      `${API_ENDPOINTS.conversations}/${encodeURIComponent(conversationId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  async renameConversation(conversationId: string, title: string, baseUrl?: string): Promise<void> {
+    await requestFastApi<unknown>(
+      baseUrl,
+      `${API_ENDPOINTS.conversations}/${encodeURIComponent(conversationId)}`,
+      { method: "PATCH", body: JSON.stringify({ title }) },
+    );
+  },
+
   // --- PS2 Real Backend Endpoints ---
 
   async getInventoryOverview(baseUrl?: string): Promise<BackendInventoryOverviewResponse> {

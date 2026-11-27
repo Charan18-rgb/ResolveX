@@ -73,6 +73,20 @@ TP=48 TN=17 FP=3 FN=4 (approx.; exact counts in `eval_live4.json`).
 - Run 1 (pre-reconciliation): P=0.8772 R=0.9804 F1=0.9259, res_acc=0.7639, FCR=0.0972, fallback=2 — 18 case-level fails, mostly comms false-positives and ambiguous/incomplete/context_dependent label mismatches.
 - Run 3 (mid-fix, Gemini rate-limited): P=0.9620 R=0.9412 — 28 fallback cases; ctx labels degraded to `incomplete` purely from `offline_fallback`, an environmental artifact.
 
+### Metric verification (recomputed from raw `results_detail`, all 4 runs)
+
+All reported metrics were recomputed directly from per-case predictions vs ground truth:
+
+- Precision = TP/(TP+FP), Recall = TP/(TP+FN), F1 = harmonic mean — **verified identical** to reported values in all 4 runs.
+- `resolution_accuracy` = correct_classification/total (it measures taxonomy-label accuracy, not end-to-end resolution — naming noted; the stricter `resolution_failed` flag gives 65/72 = 0.9028 on run 4).
+- `false_clarification_rate` = FP/total_cases (3/72 = 0.0417 on run 4) — denominator documented here for clarity.
+- Run totals: eval_live P.8772/R.9804/F1.9259 · eval_live2 (mid-fix, rate-limited) P.8627 · eval_live3 P.9600/R.9412/F1.9505 · **eval_live4 (primary) P/R/F1 = 0.9412**, class-accuracy 0.8056, FCR 0.0417, fallback 12/72.
+
+### Dataset label corrections (documented)
+
+- `nlu-pron-001` "Make it more formal." and `nlu-pron-002` "Tell him I will share the notes later." previously expected `needs_clarification=false` — logically inconsistent for **single-turn** evaluation with no prior draft/antecedent. Corrected to `expected_needs_clarification=true` with `expected_clarification_reason`. Multi-turn pronoun resolution remains covered by `follow_up_clarification` cases and live conversation tests. No other labels changed.
+- Official PS6/LightLab example documents: **not present in the repository** (only generic audit PDFs). Coverage is built from the mission specification categories; this is stated rather than invented.
+
 ### Remaining failed cases (run 4, honest list)
 
 - `amb-001` "Send the report to Rahul." → Gemini live said clear (deterministic `_send_request` correctly asks on fallback; live-model variance).
@@ -107,3 +121,39 @@ TP=48 TN=17 FP=3 FN=4 (approx.; exact counts in `eval_live4.json`).
 
 - Gemini ambiguity judgments can be conservative (e.g. "my class Charan" → clarification instead of draft) — acceptable safe behavior, may cost a turn.
 - Very long/compound sentences may exceed structured-output reliability; fallback chain mitigates.
+
+## 9. Final-phase additions (post-benchmark hardening)
+
+### Communication edit commands (verified live via `/api/ops/query`)
+
+| Input (with active draft) | Result |
+|---|---|
+| "Make it more professional." | tone=`professional` rewrite of same draft |
+| "Change tomorrow to Monday." | body text replacement `tomorrow`→`Monday`, draft preserved |
+| "Send this email to alice@example.com." | recipient = literal address; Send button only when Gmail connected |
+| "Email Charan's classmate." | clarification — unnamed possessive recipient, never assumes Charan |
+| "Tell him the meeting has been postponed." | pronoun resolved against active draft, body appended |
+
+### Email integration status — REAL, not simulated
+
+- `backend/app/services/email_service.py`: Gmail OAuth2 refresh-token flow → Gmail API `messages.send` (stdlib HTTP, no new deps). Reports `sent:true` **only** when the provider returns a message id.
+- `backend/app/api/email_routes.py`: `GET /api/email/status`, `GET /api/email/oauth/start`, `POST /api/email/send` (requires `confirm:true`; 400 without it; 502 on provider rejection).
+- Config: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GMAIL_SENDER`, `GMAIL_REFRESH_TOKEN` in `backend/.env`.
+- **Current status: NOT CONNECTED** — no Google OAuth credentials are configured in this environment. Verified live: `/api/email/status` → `connected:false`; `/send` → honest `{"sent":false,"configured":false}`. Draft-only behavior fully preserved; Send button renders only when `can_email_send` (connected + literal address recipient).
+- Tokens never reach the frontend; only booleans/status do.
+
+### Chat history — root causes fixed
+
+Root causes found: history items called `newChat` (never loaded the conversation); no active-conversation tracking; no refresh after sends; no rename/delete anywhere in the stack.
+
+Fixes:
+- `index.tsx`: `openConversation` loads `GET /api/conversations?conversation_id=` (messages, status, turn count), restores NEEDS_CLARIFICATION state for multi-turn continuation, highlights active conversation, per-conversation context isolation preserved server-side.
+- History refreshes after every analyzed message; loading/empty/error states added; send debounce via `sendingRef`; header shows active conversation title.
+- Backend: `DELETE /api/conversations/{id}` and `PATCH /api/conversations/{id}` (rename) added with cascade deletes — **verified live** (rename→title updated, delete→404 on refetch).
+- Frontend: hover rename (prompt) + delete (confirm) actions per history item.
+
+### Test results (final)
+
+- Backend pytest: **72/72** · Frontend Vitest: **26/26** · `tsc --noEmit`: 0 errors · `npm run build`: pass
+- Live API verification: email status/send honesty, conversation rename/delete, all 6 comms examples, multi-turn clarify→RESOLVED.
+- Not executed: real Gmail send (requires OAuth credentials — external dependency, reported as such), Playwright E2E (no suite configured for chat history; manual browser verification recommended).

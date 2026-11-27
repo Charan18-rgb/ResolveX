@@ -406,3 +406,26 @@ def get_confidence_history(
         return history, latest_assessment
     except sqlite3.Error as exc:
         raise DatabaseOperationError("Failed to fetch confidence history.") from exc
+
+
+def delete_conversation(db_path: str, conversation_id: str) -> bool:
+    """Delete a conversation and all dependent rows (cascade). Returns False if absent."""
+    try:
+        with get_connection(db_path) as conn:
+            cur = conn.execute("DELETE FROM conversations WHERE id = ?;", (conversation_id,))
+            return cur.rowcount > 0
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to delete conversation.") from exc
+
+
+def rename_conversation(db_path: str, conversation_id: str, title: str) -> bool:
+    """Rename a conversation's displayed title (original_instruction)."""
+    try:
+        with get_connection(db_path) as conn:
+            cur = conn.execute(
+                "UPDATE conversations SET original_instruction = ?, updated_at = ? WHERE id = ?;",
+                (title.strip()[:200], _utc_now_iso(), conversation_id),
+            )
+            return cur.rowcount > 0
+    except sqlite3.Error as exc:
+        raise DatabaseOperationError("Failed to rename conversation.") from exc

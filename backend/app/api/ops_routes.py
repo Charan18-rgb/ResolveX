@@ -243,6 +243,10 @@ def _build_draft(recipient: str, body: str, tone: str = "standard") -> dict[str,
         greeting = f"Hi {recipient},"
         closing = "Thanks,\nResolveX"
         middle = f"{body_clean[0].upper() + body_clean[1:]}."
+    elif tone == "professional":
+        greeting = f"Dear {recipient},"
+        closing = "Best regards,\nResolveX Operations"
+        middle = f"I am writing to bring the following to your attention: {body_clean[0].lower() + body_clean[1:]}. Please advise if any further information is required."
     else:
         greeting = f"Hi {recipient},"
         closing = "Regards,\nResolveX"
@@ -257,6 +261,14 @@ def _build_draft(recipient: str, body: str, tone: str = "standard") -> dict[str,
     }
 
 
+def _annotate_email(draft: dict[str, Any], recipient: str, settings: Settings) -> None:
+    """Expose provider status so the UI only offers Send when Gmail is connected."""
+    from app.services.email_service import email_status
+
+    draft["email_connected"] = email_status(settings)["connected"]
+    draft["can_email_send"] = "@" in str(recipient) and draft["email_connected"]
+
+
 def _message_draft_card(question: str, context: Optional[dict[str, Any]], settings: Settings) -> dict[str, Any]:
     """Handle communication requests and follow-up edits via structured NLU."""
     from app.core.communication_parser import parse_communication
@@ -265,7 +277,7 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     ql = question.lower()
 
     # Follow-up edit of an existing draft (tone, send request, pronoun message, name change)
-    if last and (_first_match(ql, _FOLLOWUP_PATTERNS) or _first_match(ql, ["tell ", "say ", "change his name", "change her name", "change the name", "his name", "her name"])):
+    if last and (_first_match(ql, _FOLLOWUP_PATTERNS) or ql.startswith("change ") or _first_match(ql, ["tell ", "say ", "change his name", "change her name", "change the name", "his name", "her name"])):
         # "Change his/her name to X" — update recipient only
         name_change = __import__("re").search(r"change (?:his|her|the|recipient'?s?) name to ([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)", question)
         if name_change:
@@ -280,8 +292,30 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
                 "summary": f"Recipient updated to {new_name}. Still a draft — nothing has been sent.",
                 "data": draft,
             }
+        # Content replacement edit: "Change tomorrow to Monday", "Change 50 to 75 units"
+        import re as _re2
+        repl = _re2.search(r"\bchange\s+(.+?)\s+to\s+(.+?)[.?!]?$", question, flags=_re2.IGNORECASE)
+        if repl and not _re2.search(r"\bname\b", question, flags=_re2.IGNORECASE):
+            old_txt, new_txt = repl.group(1).strip(), repl.group(2).strip()
+            base_body = last.get("raw_body") or last.get("body", "")
+            new_body = _re2.sub(
+                _re2.escape(old_txt), new_txt, base_body, flags=_re2.IGNORECASE
+            )
+            if new_body != base_body:
+                draft = _build_draft(last.get("recipient", "there"), new_body, last.get("tone", "standard"))
+                draft["raw_body"] = new_body
+                draft["delivery_status"] = "DRAFT_ONLY"
+                _annotate_email(draft, str(last.get("recipient", "")), settings)
+                return {
+                    "card_type": "message_draft",
+                    "title": f"Message Draft — {last.get('recipient', 'there')}",
+                    "summary": f"Updated the draft: \"{old_txt}\" → \"{new_txt}\". Still a draft — nothing has been sent.",
+                    "data": draft,
+                }
         tone = "standard"
-        if _first_match(ql, ["polite", "politer", "formal", "friendly"]):
+        if _first_match(ql, ["professional"]):
+            tone = "professional"
+        elif _first_match(ql, ["polite", "politer", "formal", "friendly"]):
             tone = "polite" if "formal" not in ql else "formal"
         elif _first_match(ql, ["shorter", "brief"]):
             tone = "short"
@@ -298,6 +332,7 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
         recipient = last.get("recipient", "there")
         draft = _build_draft(recipient, body, tone)
         draft["raw_body"] = body
+        _annotate_email(draft, str(recipient), settings)
         note = "Draft updated. Still not sent — no messaging provider is connected."
         if _first_match(ql, ["send it", "send now", "send tomorrow", "schedule"]):
             note += " Sending requires a connected messaging provider; the draft is ready when one is configured."
@@ -312,6 +347,17 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     # Genuinely ambiguous intents (no identifiable recipient, unnamed possessive
     # recipient) fall through to the main clarification pipeline via "help".
     intent = parse_communication(question, context, use_gemini=True)
+
+    # A literal email address is a fully identified recipient.
+    if not intent.recipient_name:
+        import re as _re3
+        addr = _re3.search(r"[\w.+-]+@[\w-]+\.[\w.]+", question)
+        if addr:
+            intent.recipient_name = addr.group(0).rstrip(".")
+            intent.requires_clarification = False
+            intent.requires_recipient_confirmation = False
+            if not intent.message or intent.message.strip().lower() in {"this email", "the email", "it", "this"}:
+                intent.message = (last or {}).get("raw_body") or intent.message or question
 
     if intent.requires_clarification and not intent.recipient_name:
         return {
@@ -330,6 +376,7 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     draft["recipient_confirmed"] = not intent.requires_recipient_confirmation
     draft["relationship"] = intent.relationship
     draft["action"] = intent.action
+    _annotate_email(draft, str(recipient), settings)
 
     if intent.requires_recipient_confirmation:
         summary = (
@@ -368,7 +415,7 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
     q_start = q.lstrip()
     if last_draft and (
         _first_match(q, _FOLLOWUP_PATTERNS)
-        or _first_match(q_start, ["tell ", "say ", "him ", "her ", "them ", "message him", "message her", "email him", "email her"])
+        or _first_match(q_start, ["tell ", "say ", "him ", "her ", "them ", "message him", "message her", "email him", "email her", "change "])
         or _first_match(q, ["change his name", "change her name", "change the name", "his name", "her name"])
     ):
         return _message_draft_card(body.question, body.context, settings)

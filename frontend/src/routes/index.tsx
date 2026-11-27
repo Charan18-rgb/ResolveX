@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot, Package, Warehouse, Truck, Users, Settings as SettingsIcon,
   Plus, Send, Loader2, AlertCircle, ChevronRight, MessageSquare, PlugZap,
+  Trash2, Pencil,
 } from "lucide-react";
 import { useResolveX } from "@/context/useResolveX";
 import { resolveXService, mapDemoRoleToBackendHeader } from "@/services/api";
@@ -43,18 +44,21 @@ function HomePage() {
   ]);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState<{ id: string; title: string }[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [activeConv, setActiveConv] = useState<{ id: string; title: string } | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const pendingClarify = useRef<{ conversationId: string } | null>(null);
   const lastDraft = useRef<Record<string, any> | null>(null);
+  const sendingRef = useRef(false);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
+  const loadHistory = useCallback(() => {
+    setHistoryLoading(true);
+    setHistoryError(null);
     resolveXService
-      .listConversations(15, 0, settings.apiBaseUrl)
+      .listConversations(30, 0, settings.apiBaseUrl)
       .then((res) => {
         const convs = res.conversations ?? [];
         setHistory(
@@ -64,8 +68,17 @@ function HomePage() {
           })),
         );
       })
-      .catch(() => setHistory([]));
+      .catch(() => setHistoryError("Couldn't load conversation history."))
+      .finally(() => setHistoryLoading(false));
   }, [settings.apiBaseUrl]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const patchMsg = useCallback((id: string, patch: Partial<ChatMsg>) => {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
@@ -74,7 +87,8 @@ function HomePage() {
   const send = useCallback(
     async (raw: string) => {
       const text = raw.trim();
-      if (!text) return;
+      if (!text || sendingRef.current) return;
+      sendingRef.current = true;
       setInput("");
       const userMsg: ChatMsg = { id: nextId(), role: "user", text, card: null };
       const aiId = nextId();
@@ -114,6 +128,8 @@ function HomePage() {
           : await resolveXService.analyzeWithBackend(text, undefined, base);
         pendingClarify.current =
           resp.status === "NEEDS_CLARIFICATION" ? { conversationId: resp.conversation_id } : null;
+        setActiveConv({ id: resp.conversation_id, title: text.slice(0, 60) });
+        loadHistory();
         const top = resp.interpretations?.[0];
         const status = String(resp.status ?? "");
         const direct = resp.resolved_intent?.direct_answer;
@@ -132,14 +148,83 @@ function HomePage() {
           pending: false,
           text: `I couldn't reach the analysis service${err instanceof Error ? ` (${err.message})` : ""}. Please check that the backend is running, or try a business question like "Which orders might be delayed?"`,
         });
+      } finally {
+        sendingRef.current = false;
       }
     },
-    [settings.apiBaseUrl, patchMsg],
+    [settings.apiBaseUrl, patchMsg, loadHistory],
+  );
+
+  const openConversation = useCallback(
+    async (h: { id: string; title: string }) => {
+      if (openingId === h.id) return;
+      setOpeningId(h.id);
+      try {
+        const detail = await resolveXService.getConversationDetail(h.id, settings.apiBaseUrl);
+        const conv = detail.conversation;
+        const loaded: ChatMsg[] = (detail.messages ?? [])
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m, i) => ({
+            id: `h${h.id}-${i}`,
+            role: m.role === "user" ? "user" : "assistant",
+            text: m.content,
+            card: null,
+            analysis: null,
+          }));
+        setMessages(
+          loaded.length
+            ? loaded
+            : [{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }],
+        );
+        setActiveConv({ id: h.id, title: conv.original_instruction?.slice(0, 60) || h.title });
+        pendingClarify.current =
+          conv.status === "NEEDS_CLARIFICATION" ? { conversationId: h.id } : null;
+        lastDraft.current = null;
+      } catch {
+        setMessages([
+          { id: nextId(), role: "assistant", text: "I couldn't load that conversation. Please try again.", card: null, analysis: null },
+        ]);
+      } finally {
+        setOpeningId(null);
+      }
+    },
+    [openingId, settings.apiBaseUrl],
+  );
+
+  const deleteConversation = useCallback(
+    async (h: { id: string; title: string }) => {
+      if (!window.confirm(`Delete conversation "${h.title}"? This cannot be undone.`)) return;
+      try {
+        await resolveXService.deleteConversation(h.id, settings.apiBaseUrl);
+        if (activeConv?.id === h.id) newChat();
+        loadHistory();
+      } catch {
+        // keep the item; history refresh will reflect reality
+        loadHistory();
+      }
+    },
+    [activeConv, settings.apiBaseUrl, loadHistory],
+  );
+
+  const renameConversation = useCallback(
+    async (h: { id: string; title: string }) => {
+      const title = window.prompt("Rename conversation:", h.title);
+      if (!title || !title.trim() || title.trim() === h.title) return;
+      try {
+        await resolveXService.renameConversation(h.id, title.trim(), settings.apiBaseUrl);
+        if (activeConv?.id === h.id) setActiveConv({ id: h.id, title: title.trim().slice(0, 60) });
+        loadHistory();
+      } catch {
+        loadHistory();
+      }
+    },
+    [activeConv, settings.apiBaseUrl, loadHistory],
   );
 
   const newChat = useCallback(() => {
     pendingClarify.current = null;
     lastDraft.current = null;
+    setActiveConv(null);
     setMessages([{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }]);
     inputRef.current?.focus();
   }, []);
@@ -161,7 +246,7 @@ function HomePage() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400"><Bot size={20} /></div>
           <div>
             <div className="text-sm font-bold text-white">ResolveX</div>
-            <div className="text-[11px] text-slate-400">Understand the Unclear. Resolve the Intent.</div>
+            <div className="text-[11px] text-slate-400">Business Operations Assistant</div>
           </div>
         </div>
         <button
@@ -172,13 +257,55 @@ function HomePage() {
         </button>
         <div className="flex-1 overflow-y-auto px-3">
           <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">History</div>
-          {history.length === 0 && <p className="px-2 text-xs text-slate-500">No past conversations yet.</p>}
-          {history.slice(0, 20).map((h) => (
-            <button key={h.id} onClick={newChat} className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-slate-300 hover:bg-slate-800">
-              <MessageSquare size={12} className="shrink-0 text-slate-500" />
-              <span className="truncate">{h.title}</span>
-            </button>
-          ))}
+          {historyLoading && (
+            <div className="flex items-center gap-2 px-2 py-2 text-xs text-slate-500">
+              <Loader2 size={12} className="animate-spin" /> Loading…
+            </div>
+          )}
+          {!historyLoading && historyError && (
+            <div className="px-2 py-2 text-xs text-rose-400">{historyError}</div>
+          )}
+          {!historyLoading && !historyError && history.length === 0 && (
+            <p className="px-2 text-xs text-slate-500">No past conversations yet.</p>
+          )}
+          {!historyLoading &&
+            history.slice(0, 30).map((h) => (
+              <div
+                key={h.id}
+                className={`group mb-1 flex items-center gap-1 rounded-md px-1 py-1 ${
+                  activeConv?.id === h.id ? "bg-slate-800" : "hover:bg-slate-800"
+                }`}
+              >
+                <button
+                  onClick={() => void openConversation(h)}
+                  disabled={openingId === h.id}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-1 py-1 text-left text-xs text-slate-300"
+                >
+                  {openingId === h.id ? (
+                    <Loader2 size={12} className="shrink-0 animate-spin text-cyan-400" />
+                  ) : (
+                    <MessageSquare size={12} className="shrink-0 text-slate-500" />
+                  )}
+                  <span className="truncate">{h.title}</span>
+                </button>
+                <button
+                  onClick={() => void renameConversation(h)}
+                  className="hidden shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-slate-200 group-hover:block"
+                  title="Rename"
+                  aria-label={`Rename ${h.title}`}
+                >
+                  <Pencil size={11} />
+                </button>
+                <button
+                  onClick={() => void deleteConversation(h)}
+                  className="hidden shrink-0 rounded p-1 text-slate-500 hover:bg-slate-700 hover:text-rose-400 group-hover:block"
+                  title="Delete"
+                  aria-label={`Delete ${h.title}`}
+                >
+                  <Trash2 size={11} />
+                </button>
+              </div>
+            ))}
         </div>
         <nav className="border-t border-slate-800 p-3">
           {navItems.map((item) => (
@@ -208,9 +335,13 @@ function HomePage() {
           ))}
         </div>
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
-          <div>
-            <h1 className="text-base font-semibold text-slate-900">Business Assistant</h1>
-            <p className="text-xs text-slate-500">Answers use live inventory, warehouse, supplier and order data.</p>
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold text-slate-900">
+              {activeConv ? activeConv.title : "Business Assistant"}
+            </h1>
+            <p className="text-xs text-slate-500">
+              {activeConv ? "Conversation in progress" : "Answers use live inventory, warehouse, supplier and order data."}
+            </p>
           </div>
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">● Live data</span>
         </header>
