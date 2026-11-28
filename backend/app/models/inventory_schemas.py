@@ -43,15 +43,34 @@ class MaterialOverview(BaseModel):
     id: str
     sku: str
     name: str
+    description: str = ""
+    category: str = "General"
+    aliases: list[str] = Field(default_factory=list)
+    data_origin: str = "SEEDED_DEMO"
     unit: str
     on_hand: float
     incoming: float
     allocated: float
+    reserved: float = 0.0
+    physical_available: float = 0.0
     net_availability: float
+    projected_availability: float = 0.0
     reorder_threshold: float
     stock_status: Literal["HEALTHY", "LOW_STOCK", "OUT_OF_STOCK"]
     lead_time_days: Optional[int] = None
+    supplier_id: Optional[str] = None
     supplier_name: Optional[str] = None
+    warehouse_locations: list[str] = Field(default_factory=list)
+
+
+class MaterialStockUpdateRequest(BaseModel):
+    """Operator request to update direct stock supply levels for a material."""
+
+    on_hand: Optional[float] = Field(default=None, ge=0.0)
+    incoming: Optional[float] = Field(default=None, ge=0.0)
+    reorder_threshold: Optional[float] = Field(default=None, ge=0.0)
+    reason: Optional[str] = Field(default=None, max_length=500)
+    actor: Optional[str] = Field(default=None, max_length=120)
 
 
 class InventoryOverviewResponse(BaseModel):

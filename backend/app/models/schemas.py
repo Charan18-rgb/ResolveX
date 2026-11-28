@@ -243,6 +243,17 @@ class IntentRiskAssessment(BaseModel):
     safe_to_resolve: bool
 
 
+class ClarificationCandidate(BaseModel):
+    """Selectable option presented inline inside chat during clarification."""
+
+    id: str
+    kind: Literal["person", "material", "confirmation", "action"] = "person"
+    label: str
+    subtitle: Optional[str] = None
+    reply_text: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class AnalyzeResponse(BaseModel):
     """Response payload for POST /api/analyze and POST /api/clarify."""
 
@@ -261,6 +272,11 @@ class AnalyzeResponse(BaseModel):
     confidence_history: list[ConfidenceHistoryPoint] = Field(default_factory=list)
     context_memory: Optional[SessionContextMemory] = None
     risk_assessment: Optional[IntentRiskAssessment] = None
+    candidate_options: list[ClarificationCandidate] = Field(default_factory=list)
+    resolved_slots: dict[str, Any] = Field(default_factory=dict)
+    pending_slot: Optional[str] = None
+    workflow_type: Optional[str] = None
+    resolved_identity: Optional[dict[str, Any]] = None
     analysis_source: Optional[Literal["gemini", "local", "offline_fallback", "system"]] = Field(
         default=None,
         description="Which engine produced the analysis: live Gemini, deterministic local rules, offline fallback, or system force-resolution.",

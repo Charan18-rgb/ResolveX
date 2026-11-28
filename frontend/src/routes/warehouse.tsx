@@ -46,10 +46,35 @@ function WarehousePage() {
   }, [settings.apiBaseUrl]);
 
   const highlightMat = useMemo(() => query.trim().toUpperCase(), [query]);
-  const highlighted = useMemo(
-    () => new Set(bins.filter((b) => b.material_id && (b.material_id === highlightMat || (b.material_sku ?? "").toUpperCase() === highlightMat || (b.material_name ?? "").toUpperCase().includes(highlightMat))).map((b) => b.id)),
-    [bins, highlightMat],
-  );
+  const highlighted = useMemo(() => {
+    if (!highlightMat) return new Set<string>();
+    const typoMap: Record<string, string> = {
+      SCRU: "SCREW",
+      ALUMUNIUM: "ALUMINIUM",
+      ALUMINUM: "ALUMINIUM",
+      BARING: "BEARING",
+      SPANNER: "WRENCH",
+      HELMET: "HARD HAT",
+      GLOVES: "GLOVE",
+      WIRE: "CABLE",
+      SENSOR: "PROXIMITY",
+    };
+    const tokens = highlightMat
+      .split(/\s+/)
+      .filter((t) => t.length >= 2)
+      .map((t) => typoMap[t] ?? t);
+    return new Set(
+      bins
+        .filter((b) => {
+          if (!b.material_id) return false;
+          const hay = `${b.material_id} ${b.material_sku ?? ""} ${b.material_name ?? ""} ${b.zone_code ?? ""} ${b.rack_code ?? ""} ${b.shelf_code ?? ""}`.toUpperCase();
+          if (b.material_id === highlightMat || (b.material_sku ?? "").toUpperCase() === highlightMat) return true;
+          if (hay.includes(highlightMat)) return true;
+          return tokens.length > 0 && tokens.every((t) => hay.includes(t) || hay.includes(t.replace(/S$/, "")));
+        })
+        .map((b) => b.id),
+    );
+  }, [bins, highlightMat]);
 
   const zones = useMemo(() => {
     const map = new Map<string, StorageBin[]>();
@@ -67,8 +92,8 @@ function WarehousePage() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Warehouse</h1>
-          <p className="text-sm text-slate-500">{overview?.warehouse?.name ?? "Storage facility"} — interactive storage map from configured warehouse records (seeded demonstration layout).</p>
+          <h1 className="text-2xl font-bold text-white">Warehouse</h1>
+          <p className="text-sm text-slate-300">{overview?.warehouse?.name ?? "Storage facility"} — interactive storage map from configured warehouse records (seeded demonstration layout).</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

@@ -1228,6 +1228,28 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     [refreshInventoryData, settings.apiBaseUrl],
   );
 
+  const updateMaterialStock = useCallback(
+    async (
+      materialId: string,
+      payload: {
+        on_hand?: number;
+        incoming?: number;
+        reorder_threshold?: number;
+        reason?: string;
+        actor?: string;
+      },
+    ) => {
+      const updated = await resolveXService.updateMaterialStock(
+        materialId,
+        payload,
+        settings.apiBaseUrl,
+      );
+      await refreshInventoryData();
+      return updated;
+    },
+    [refreshInventoryData, settings.apiBaseUrl],
+  );
+
   const acknowledgeBackendAlert = useCallback(
     async (alertId: number) => {
       await resolveXService.acknowledgeAlert(alertId, settings.apiBaseUrl);
@@ -1422,12 +1444,12 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
             ? "/inventory"
             : resp.status === "RESOLVED"
               ? "/resolution"
-              : "/clarification",
+              : "/",
           suggestedLabel: isInventory
             ? "Open Inventory Hub"
             : resp.status === "RESOLVED"
               ? "Inspect Intent Spec"
-              : "Continue in Clarification",
+              : "Continue in Unified Chat",
           timestamp: nowLabel,
         };
         setAssistantMessages((prev) => [...prev, assistantMsg]);
@@ -1635,6 +1657,7 @@ export function ResolveXProvider({ children }: { children: ReactNode }) {
     generatePoProposals,
     recalculateInventoryAllocations,
     ingestInventoryEvent,
+    updateMaterialStock,
     acknowledgeBackendAlert,
     decidePoProposal,
     materials,

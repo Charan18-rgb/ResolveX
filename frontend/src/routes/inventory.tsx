@@ -10,14 +10,17 @@ import {
   Clock,
   Loader2,
   Package,
+  Pencil,
   RefreshCw,
+  Search,
   ShoppingCart,
   Sparkles,
   UserCheck,
+  X,
   XCircle,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, type BadgeTone } from "@/components/resolvex/Badge";
 import { Button } from "@/components/resolvex/Button";
 import { Card } from "@/components/resolvex/Card";
@@ -25,6 +28,7 @@ import { DemoBanner } from "@/components/resolvex/DemoBanner";
 import { SectionHeader } from "@/components/resolvex/SectionHeader";
 import { useResolveX } from "@/context/useResolveX";
 import { DEMO_ROLES } from "@/data/inventoryMockData";
+import { resolveXService } from "@/services/api";
 import type {
   BackendMaterialOverview,
   BackendOrderRiskItem,
@@ -75,10 +79,12 @@ function InventoryHubPage() {
     generatePoProposals,
     recalculateInventoryAllocations,
     ingestInventoryEvent,
+    updateMaterialStock,
     acknowledgeBackendAlert,
     decidePoProposal,
     runAnalysis,
     setAssistantOpen,
+    settings,
   } = useResolveX();
 
   const roleConfig = DEMO_ROLES.find((r) => r.role === activeRole) ?? DEMO_ROLES[0];
@@ -86,13 +92,55 @@ function InventoryHubPage() {
   const [stockFilter, setStockFilter] = useState<BackendMaterialOverview["stock_status"] | "All">(
     "All",
   );
+  const [categoryFilter, setCategoryFilter] = useState<string>("All");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [serverSearchResults, setServerSearchResults] = useState<BackendMaterialOverview[] | null>(
+    null,
+  );
   const [actionFeedback, setActionFeedback] = useState<{
     tone: "emerald" | "rose" | "amber";
     message: string;
   } | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<BackendMaterialOverview | null>(null);
+  const [editOnHand, setEditOnHand] = useState<string>("0");
+  const [editIncoming, setEditIncoming] = useState<string>("0");
+  const [editThreshold, setEditThreshold] = useState<string>("0");
+  const [editReason, setEditReason] = useState<string>("");
+  const [editError, setEditError] = useState<string | null>(null);
 
   const materials = backendInventoryOverview?.materials ?? [];
+  const categories = useMemo(
+    () => [
+      "All",
+      ...Array.from(new Set(materials.map((m) => m.category || "General"))).sort(),
+    ],
+    [materials],
+  );
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setServerSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      resolveXService
+        .searchInventoryMaterials(q, categoryFilter, settings.apiBaseUrl)
+        .then((res) => {
+          if (!cancelled) setServerSearchResults(res);
+        })
+        .catch(() => {
+          if (!cancelled) setServerSearchResults(null);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, categoryFilter, settings.apiBaseUrl]);
+
   const totalOnHand = materials.reduce((sum, m) => sum + m.on_hand, 0);
   const totalIncoming = materials.reduce((sum, m) => sum + m.incoming, 0);
   const shortageCount = backendShortages.length;
@@ -102,7 +150,23 @@ function InventoryHubPage() {
   ).length;
   const unackAlerts = backendAlerts.filter((a) => !a.acknowledged);
 
-  const filteredMaterials = materials.filter((m) =>
+  const baseList = useMemo(() => {
+    if (serverSearchResults !== null && searchQuery.trim()) return serverSearchResults;
+    const q = searchQuery.trim().toLowerCase();
+    return materials.filter((m) => {
+      if (categoryFilter !== "All" && (m.category || "General") !== categoryFilter) return false;
+      if (!q) return true;
+      return (
+        m.id.toLowerCase().includes(q) ||
+        m.sku.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
+        (m.category || "").toLowerCase().includes(q) ||
+        (m.aliases ?? []).some((a) => a.toLowerCase().includes(q))
+      );
+    });
+  }, [serverSearchResults, searchQuery, materials, categoryFilter]);
+
+  const filteredMaterials = baseList.filter((m) =>
     stockFilter === "All" ? true : m.stock_status === stockFilter,
   );
 
@@ -112,6 +176,57 @@ function InventoryHubPage() {
       void navigate({ to: "/analysis" });
     } catch {
       // surfaced in context
+    }
+  };
+
+  const openStockEditor = (mat: BackendMaterialOverview) => {
+    setEditingMaterial(mat);
+    setEditOnHand(String(mat.on_hand));
+    setEditIncoming(String(mat.incoming));
+    setEditThreshold(String(mat.reorder_threshold));
+    setEditReason("");
+    setEditError(null);
+  };
+
+  const handleSaveStockEdit = async () => {
+    if (!editingMaterial || isMutating) return;
+    const onHandNum = Number(editOnHand);
+    const incomingNum = Number(editIncoming);
+    const thresholdNum = Number(editThreshold);
+    if (
+      !Number.isFinite(onHandNum) ||
+      !Number.isFinite(incomingNum) ||
+      !Number.isFinite(thresholdNum) ||
+      onHandNum < 0 ||
+      incomingNum < 0 ||
+      thresholdNum < 0
+    ) {
+      setEditError("All stock quantities and thresholds must be valid numbers >= 0.");
+      return;
+    }
+    setIsMutating(true);
+    setEditError(null);
+    setActionFeedback(null);
+    try {
+      const updated = await updateMaterialStock(editingMaterial.id, {
+        on_hand: onHandNum,
+        incoming: incomingNum,
+        reorder_threshold: thresholdNum,
+        ...(editReason.trim() ? { reason: editReason.trim() } : {}),
+        actor: activeRole,
+      });
+      setEditingMaterial(null);
+      setActionFeedback({
+        tone: updated.on_hand <= 0 || updated.stock_status === "OUT_OF_STOCK" ? "amber" : "emerald",
+        message:
+          updated.on_hand <= 0
+            ? `Updated ${updated.name} (${updated.sku}): stock set to 0 ${updated.unit} (OUT OF STOCK). Dispatch requests for this item will prompt users to choose another item.`
+            : `Updated ${updated.name} (${updated.sku}): on-hand ${updated.on_hand} ${updated.unit}, incoming +${updated.incoming} ${updated.unit} (${updated.stock_status}).`,
+      });
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update stock levels.");
+    } finally {
+      setIsMutating(false);
     }
   };
 
@@ -469,86 +584,145 @@ function InventoryHubPage() {
         <Card padding="none" className="overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
             <div>
-              <h3 className="text-base font-semibold text-white">
-                Material Stock &amp; Net Availability Matrix
-              </h3>
-              <p className="text-xs text-slate-400">
-                Formula: Net Availability = On-Hand + Incoming − Allocated
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold text-white">
+                  Material Stock &amp; Net Availability Matrix
+                </h3>
+                <Badge tone="slate">Seeded Demo Catalog + SQLite Balances</Badge>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Physical Available = On-Hand − Allocated/Reserved • Projected (Net) = On-Hand + Incoming − Allocated
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {(["All", "OUT_OF_STOCK", "LOW_STOCK", "HEALTHY"] as const).map((h) => (
-                <button
-                  key={h}
-                  type="button"
-                  onClick={() => setStockFilter(h)}
-                  className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium ${
-                    stockFilter === h
-                      ? "bg-violet-500/25 text-white border border-violet-400/40"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
-                  }`}
-                >
-                  {h}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search name, synonym (screw jack), SKU..."
+                  aria-label="Search materials"
+                  className="w-60 rounded-lg border border-white/12 bg-[#050814]/80 py-1.5 pl-8 pr-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/60 focus:outline-none"
+                />
+              </div>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                aria-label="Filter by category"
+                className="rounded-lg border border-white/12 bg-[#050814]/80 px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400/60 focus:outline-none"
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat} className="bg-[#0a0f1f]">
+                    {cat === "All" ? "All Categories" : cat}
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-wrap gap-1">
+                {(["All", "OUT_OF_STOCK", "LOW_STOCK", "HEALTHY"] as const).map((h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    onClick={() => setStockFilter(h)}
+                    className={`cursor-pointer rounded-lg px-2.5 py-1 text-xs font-medium ${
+                      stockFilter === h
+                        ? "bg-violet-500/25 text-white border border-violet-400/40"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-left text-xs sm:text-sm">
+            <table className="w-full min-w-[980px] text-left text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-[11px] uppercase tracking-wider text-slate-400">
-                  <th className="px-4 py-3">Material ID / SKU</th>
-                  <th className="px-4 py-3">On-Hand</th>
+                  <th className="px-4 py-3">Product / Category / Location</th>
+                  <th className="px-4 py-3">Physical On-Hand</th>
+                  <th className="px-4 py-3">Allocated / Reserved</th>
+                  <th className="px-4 py-3">Phys. Available</th>
                   <th className="px-4 py-3">Incoming</th>
-                  <th className="px-4 py-3">Allocated</th>
-                  <th className="px-4 py-3">Net Availability</th>
-                  <th className="px-4 py-3">Threshold / Lead</th>
+                  <th className="px-4 py-3">Projected Net Avail</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Supply Control</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/8">
                 {filteredMaterials.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-xs text-slate-400">
-                      No materials match the current filter, or the inventory service returned no data.
+                    <td colSpan={8} className="px-4 py-8 text-center text-xs text-slate-400">
+                      No materials match the current search/filter criteria.
                     </td>
                   </tr>
                 ) : (
-                  filteredMaterials.map((mat) => (
-                    <tr key={mat.id} className="hover:bg-white/3">
-                      <td className="px-4 py-3.5">
-                        <span className="font-mono text-xs text-cyan-300">
-                          {mat.id} • {mat.sku}
-                        </span>
-                        <p className="font-medium text-white">{mat.name}</p>
-                        <p className="text-[11px] text-slate-400">
-                          {mat.supplier_name ?? "No preferred supplier"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-slate-200">
-                        {mat.on_hand} {mat.unit}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-cyan-300">
-                        +{mat.incoming} {mat.unit}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-slate-400">
-                        {mat.allocated} {mat.unit}
-                      </td>
-                      <td className="px-4 py-3.5 font-mono font-semibold text-white">
-                        {mat.net_availability} {mat.unit}
-                      </td>
-                      <td className="px-4 py-3.5 text-xs text-slate-300">
-                        {mat.reorder_threshold} {mat.unit} •{" "}
-                        {mat.lead_time_days != null
-                          ? `${mat.lead_time_days}d lead`
-                          : "No lead time"}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge tone={STOCK_TONE[mat.stock_status]}>{mat.stock_status}</Badge>
-                      </td>
-                    </tr>
-                  ))
+                  filteredMaterials.map((mat) => {
+                    const physAvail = mat.physical_available ?? Math.max(0, mat.on_hand - mat.allocated);
+                    const binLabel = (mat.warehouse_locations ?? []).join(", ") || "Unassigned";
+                    return (
+                      <tr
+                        key={mat.id}
+                        className={`hover:bg-white/3 ${mat.on_hand <= 0 ? "bg-rose-500/5" : ""}`}
+                      >
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-xs text-cyan-300">
+                              {mat.id} • {mat.sku}
+                            </span>
+                            <Badge tone="slate">{mat.category ?? "General"}</Badge>
+                          </div>
+                          <p className="font-medium text-white mt-0.5">{mat.name}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {mat.supplier_name ?? "No preferred supplier"} • Bin: {binLabel}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-slate-200">
+                          {mat.on_hand} {mat.unit}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-slate-400">
+                          {mat.allocated} {mat.unit}
+                        </td>
+                        <td
+                          className={`px-4 py-3.5 font-mono ${
+                            physAvail <= 0 ? "text-rose-300 font-semibold" : "text-emerald-300"
+                          }`}
+                        >
+                          {physAvail} {mat.unit}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono text-cyan-300">
+                          +{mat.incoming} {mat.unit}
+                        </td>
+                        <td className="px-4 py-3.5 font-mono font-semibold text-white">
+                          {mat.net_availability} {mat.unit}
+                          <p className="text-[10px] font-normal text-slate-400">
+                            Threshold: {mat.reorder_threshold} {mat.unit}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge tone={STOCK_TONE[mat.stock_status]}>{mat.stock_status}</Badge>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                              {mat.data_origin === "LIVE_EVENT" ? "Live Updated" : "Seeded Demo"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            aria-label={`Edit stock for ${mat.name}`}
+                            iconLeft={<Pencil className="h-3.5 w-3.5 text-cyan-400" />}
+                            onClick={() => openStockEditor(mat)}
+                          >
+                            Edit Stock
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -885,6 +1059,205 @@ function InventoryHubPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {editingMaterial && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-stock-dialog-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-white/15 bg-slate-900 p-5 sm:p-6 shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-cyan-300">
+                  {editingMaterial.id} • {editingMaterial.sku}
+                </p>
+                <h3 id="edit-stock-dialog-title" className="text-lg font-semibold text-white mt-0.5">
+                  Edit Stock Supply — {editingMaterial.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Bins: {(editingMaterial.warehouse_locations ?? []).join(", ") || "Unassigned"} •
+                  Reserved by open orders: {editingMaterial.allocated} {editingMaterial.unit}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close stock editor"
+                onClick={() => setEditingMaterial(null)}
+                className="rounded-lg border border-white/10 p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-slate-400 mr-1">Quick supply presets:</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditOnHand("0")}
+                className="border-rose-500/40 text-rose-200 hover:bg-rose-500/15"
+              >
+                Set On-Hand to 0 (Out of Stock)
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  setEditOnHand(String(Math.max(0, (Number(editOnHand) || 0) + 10)))
+                }
+              >
+                +10 {editingMaterial.unit}
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  setEditOnHand(String(Math.max(0, (Number(editOnHand) || 0) - 10)))
+                }
+              >
+                -10 {editingMaterial.unit}
+              </Button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label
+                  htmlFor="edit-on-hand-input"
+                  className="block text-xs font-medium text-slate-300 mb-1"
+                >
+                  Physical On-Hand ({editingMaterial.unit})
+                </label>
+                <input
+                  id="edit-on-hand-input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editOnHand}
+                  onChange={(e) => setEditOnHand(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 font-mono text-sm text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="edit-incoming-input"
+                  className="block text-xs font-medium text-slate-300 mb-1"
+                >
+                  Incoming ({editingMaterial.unit})
+                </label>
+                <input
+                  id="edit-incoming-input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editIncoming}
+                  onChange={(e) => setEditIncoming(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 font-mono text-sm text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="edit-threshold-input"
+                  className="block text-xs font-medium text-slate-300 mb-1"
+                >
+                  Reorder Threshold
+                </label>
+                <input
+                  id="edit-threshold-input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={editThreshold}
+                  onChange={(e) => setEditThreshold(e.target.value)}
+                  className="w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 font-mono text-sm text-white focus:border-cyan-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-stock-reason-input"
+                className="block text-xs font-medium text-slate-300 mb-1"
+              >
+                Update Reason / Audit Note (optional)
+              </label>
+              <input
+                id="edit-stock-reason-input"
+                type="text"
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="e.g., Physical cycle count adjustment"
+                className="w-full rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none"
+              />
+            </div>
+
+            {(() => {
+              const previewOnHand = Number(editOnHand);
+              const previewIncoming = Number(editIncoming);
+              const previewThreshold = Number(editThreshold);
+              const valid =
+                Number.isFinite(previewOnHand) &&
+                Number.isFinite(previewIncoming) &&
+                Number.isFinite(previewThreshold) &&
+                previewOnHand >= 0 &&
+                previewIncoming >= 0 &&
+                previewThreshold >= 0;
+              if (!valid) return null;
+              const projectedNet =
+                previewOnHand + previewIncoming - editingMaterial.allocated;
+              const previewStatus: BackendMaterialOverview["stock_status"] =
+                projectedNet <= 0
+                  ? "OUT_OF_STOCK"
+                  : projectedNet <= previewThreshold
+                    ? "LOW_STOCK"
+                    : "HEALTHY";
+              return (
+                <div className="rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-300">
+                      Preview Phys. Available:{" "}
+                      <strong className="font-mono text-white">
+                        {Math.max(0, previewOnHand - editingMaterial.allocated)}{" "}
+                        {editingMaterial.unit}
+                      </strong>
+                      {" · "}Net:{" "}
+                      <strong className="font-mono text-white">
+                        {projectedNet} {editingMaterial.unit}
+                      </strong>
+                    </span>
+                    <Badge tone={STOCK_TONE[previewStatus]}>{previewStatus}</Badge>
+                  </div>
+                  {previewOnHand === 0 && (
+                    <p className="text-amber-200">
+                      At 0 {editingMaterial.unit}, this item is finished / out of stock — dispatch
+                      requests will alert the operator and prompt to choose another item.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
+            {editError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-rose-500/40 bg-rose-500/15 px-3 py-2 text-xs text-rose-200"
+              >
+                {editError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <Button variant="secondary" onClick={() => setEditingMaterial(null)}>
+                Cancel
+              </Button>
+              <Button isLoading={isMutating} onClick={() => void handleSaveStockEdit()}>
+                Save Stock
+              </Button>
+            </div>
           </div>
         </div>
       )}

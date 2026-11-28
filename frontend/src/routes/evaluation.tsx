@@ -124,8 +124,8 @@ function EvaluationPage() {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
           <ShieldAlert className="h-7 w-7 text-slate-400" />
         </div>
-        <h1 className="text-xl font-semibold text-slate-900">Operator area</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-white">Operator area</h1>
+        <p className="mt-2 text-sm text-slate-300">
           Evaluation metrics and diagnostics are restricted to authorized operators.
           Your current role is <span className="font-medium">{activeRole}</span>. Switch to the
           System Operator role to access this area.

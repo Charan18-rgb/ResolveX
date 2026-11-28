@@ -93,7 +93,7 @@ function InterpretationsPage() {
 
   const handleSendToClarification = (interpId: string) => {
     sendScenarioToClarification(interpId);
-    void navigate({ to: "/clarification" });
+    void navigate({ to: "/" });
   };
 
   const handleReset = () => {
@@ -167,14 +167,14 @@ function InterpretationsPage() {
         compact
         assessment={confidenceAssessment}
         liveBackendNotice={liveBackendNotice}
-        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        onRequestClarification={() => void navigate({ to: "/" })}
         title="Confidence vs. Verified Correctness Overview"
       />
 
       <ContextMemoryPanel
         compact
         title="Session Memory & Resolved Scenario Entities"
-        onResolveConflictClick={() => void navigate({ to: "/clarification" })}
+        onResolveConflictClick={() => void navigate({ to: "/" })}
       />
 
       {/* Feature 9: Risk-Aware Intent Guardrails */}
@@ -183,7 +183,7 @@ function InterpretationsPage() {
         assessment={riskAssessment}
         userConfirmed={userConfirmedHighRisk}
         onConfirmHighRisk={setUserConfirmedHighRisk}
-        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        onRequestClarification={() => void navigate({ to: "/" })}
         title="Scenario Risk Classification & Safety Guardrails"
       />
 
@@ -658,7 +658,7 @@ function InterpretationsPage() {
         title="Synchronized Context Intelligence Graph (Live Scenario Preview)"
         onClarifyNode={(questionId) => {
           focusClarificationQuestion(questionId);
-          void navigate({ to: "/clarification" });
+          void navigate({ to: "/" });
         }}
       />
     </div>

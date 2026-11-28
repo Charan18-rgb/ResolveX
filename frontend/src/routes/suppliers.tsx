@@ -29,7 +29,7 @@ function SuppliersPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-900">Suppliers</h1>
+      <h1 className="text-2xl font-bold text-white">Suppliers</h1>
       <p className="mb-6 text-sm text-slate-500">Delivery performance computed from recorded delivery history (seeded demonstration data). Sample sizes are shown; past performance does not guarantee future results.</p>
       {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 

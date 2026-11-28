@@ -1069,15 +1069,24 @@ export interface BackendMaterialOverview {
   id: string;
   sku: string;
   name: string;
+  description?: string;
+  category?: string;
+  aliases?: string[];
+  data_origin?: string;
   unit: string;
   on_hand: number;
   incoming: number;
   allocated: number;
+  reserved?: number;
+  physical_available?: number;
   net_availability: number;
+  projected_availability?: number;
   reorder_threshold: number;
   stock_status: "HEALTHY" | "LOW_STOCK" | "OUT_OF_STOCK";
   lead_time_days?: number | null;
+  supplier_id?: string | null;
   supplier_name?: string | null;
+  warehouse_locations?: string[];
 }
 
 export interface BackendInventoryOverviewResponse {
@@ -1138,6 +1147,15 @@ export interface BackendInventoryInsight {
   note: string;
 }
 
+export interface ClarificationCandidate {
+  id: string;
+  kind: "person" | "material" | "confirmation" | "action";
+  label: string;
+  subtitle?: string | null;
+  reply_text: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface BackendAnalyzeResponse {
   conversation_id: string;
   status: BackendConversationStatus;
@@ -1155,6 +1173,11 @@ export interface BackendAnalyzeResponse {
   confidence_history?: BackendConfidenceHistoryDTO[];
   context_memory?: BackendContextMemoryDTO | null;
   risk_assessment?: BackendRiskAssessmentDTO | null;
+  candidate_options?: ClarificationCandidate[];
+  resolved_slots?: Record<string, unknown>;
+  pending_slot?: string | null;
+  workflow_type?: string | null;
+  resolved_identity?: Record<string, unknown> | null;
 }
 
 export interface BackendConversationSummary {
@@ -1193,6 +1216,11 @@ export interface BackendConversationDetail {
     status: string;
     updated_at: string;
   } | null;
+  workflow_type?: string | null;
+  pending_slot?: string | null;
+  resolved_slots?: Record<string, unknown>;
+  candidate_options?: ClarificationCandidate[];
+  resolved_entities?: Array<Record<string, unknown>>;
 }
 
 export interface BackendOrderRow {

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot, Package, Warehouse, Truck, Users, Settings as SettingsIcon,
   Plus, Send, Loader2, AlertCircle, ChevronRight, MessageSquare, PlugZap,
-  Trash2, Pencil,
+  Trash2, Pencil, Sparkles, BarChart3,
 } from "lucide-react";
 import { useResolveX } from "@/context/useResolveX";
 import { resolveXService, mapDemoRoleToBackendHeader } from "@/services/api";
@@ -11,6 +11,7 @@ import { opsApi, type OpsCard } from "@/services/opsApi";
 import { OpsCardView } from "@/components/chat/OpsCardView";
 import { createConvStateStore, NEW_CONV_KEY, type ConvStateStore } from "@/lib/convState";
 import { RenameConversationDialog, DeleteConversationDialog } from "@/components/chat/ConversationDialogs";
+import type { ClarificationCandidate } from "@/types/resolvex";
 
 export const Route = createFileRoute("/")({ component: HomePage });
 
@@ -19,7 +20,21 @@ interface ChatMsg {
   role: "user" | "assistant";
   text: string;
   card?: OpsCard | null;
-  analysis?: { status: string; summary: string } | null;
+  analysis?: {
+    status: string;
+    summary: string;
+    classification?: string | undefined;
+    ambiguityTypes?: string[] | undefined;
+    interpretations?: Array<{ label: string; description: string }> | undefined;
+    missingInfo?: string[] | undefined;
+    confidenceScore?: number | undefined;
+  } | null;
+  candidates?: ClarificationCandidate[];
+  resolvedAction?: {
+    action: string;
+    resolvedInstruction: string;
+    parameters: Record<string, unknown>;
+  } | null;
   pending?: boolean;
 }
 
@@ -170,41 +185,43 @@ function HomePage() {
       const convKey = activeConv?.id ?? NEW_CONV_KEY;
       const cs = convStore.get(convKey);
       try {
-        try {
-          const card = await opsApi.query(
-            text,
-            base,
-            cs.draft ? { last_message_draft: cs.draft } : undefined,
-            activeConv?.id ?? undefined,
-          );
-          if (card.card_type !== "help") {
-            // The backend persists ops turns into conversations and returns the
-            // id — adopt it so drafts/history attach to the right conversation.
-            const cid = card.conversation_id ?? convKey;
-            if (cid !== convKey) {
-              convStore.set(cid, { pendingClarify: null });
-              if (convKey === NEW_CONV_KEY) convStore.clear(NEW_CONV_KEY);
-              setActiveConv({ id: cid, title: text.slice(0, 60) });
-              loadHistory();
+        if (!cs.pendingClarify) {
+          try {
+            const card = await opsApi.query(
+              text,
+              base,
+              cs.draft ? { last_message_draft: cs.draft } : undefined,
+              activeConv?.id ?? undefined,
+            );
+            if (card.card_type !== "help") {
+              // The backend persists ops turns into conversations and returns the
+              // id — adopt it so drafts/history attach to the right conversation.
+              const cid = card.conversation_id ?? convKey;
+              if (cid !== convKey) {
+                convStore.set(cid, { pendingClarify: null });
+                if (convKey === NEW_CONV_KEY) convStore.clear(NEW_CONV_KEY);
+                setActiveConv({ id: cid, title: text.slice(0, 60) });
+                loadHistory();
+              }
+              if (card.card_type === "message_draft") {
+                convStore.set(cid, { draft: card.data as Record<string, any> });
+              } else {
+                convStore.set(cid, { draft: null, pendingClarify: null });
+              }
+              patchMsg(aiId, {
+                pending: false,
+                text: card.summary ?? card.title,
+                card,
+              });
+              return;
             }
-            if (card.card_type === "message_draft") {
-              convStore.set(cid, { draft: card.data as Record<string, any> });
-            } else {
-              convStore.set(cid, { draft: null, pendingClarify: null });
-            }
-            patchMsg(aiId, {
-              pending: false,
-              text: card.summary ?? card.title,
-              card,
-            });
-            return;
+          } catch {
+            // ops router unreachable — fall through to language pipeline
           }
-        } catch {
-          // ops router unreachable — fall through to language pipeline
         }
         convStore.set(convKey, { draft: null });
 
-        // Fall back to the language-understanding pipeline for instructions/clarifications.
+        // Fall back to the language-understanding pipeline (or continue active clarification).
         try {
           // Multi-turn: if the previous turn asked for clarification, continue that conversation.
           const resp = cs.pendingClarify
@@ -215,19 +232,47 @@ function HomePage() {
           const newKey = resp.conversation_id;
           convStore.set(newKey, { pendingClarify: pending, draft: null });
           if (newKey !== convKey) convStore.set(convKey, { pendingClarify: null });
-          setActiveConv({ id: resp.conversation_id, title: text.slice(0, 60) });
+          setActiveConv((prev) =>
+            prev?.id === resp.conversation_id
+              ? prev
+              : { id: resp.conversation_id, title: text.slice(0, 60) },
+          );
           loadHistory();
           const top = resp.interpretations?.[0];
           const status = String(resp.status ?? "");
           const direct = resp.resolved_intent?.direct_answer;
+          const invExpl = (resp.inventory_insight as { explanation?: string } | null | undefined)?.explanation;
+          const firstQuestion = resp.clarification_questions?.[0];
           const summary =
             status === "NEEDS_CLARIFICATION"
-              ? `I need a bit more detail before I can resolve that.${resp.clarification_questions?.length ? ` ${resp.clarification_questions[0]}` : ""}`
-              : direct || top?.label || top?.description || "I processed your request.";
+              ? firstQuestion || "Could you clarify the missing detail?"
+              : direct || invExpl || resp.resolved_intent?.resolved_instruction || top?.label || top?.description || "I processed your request.";
           patchMsg(aiId, {
             pending: false,
             text: summary,
-            analysis: { status, summary },
+            analysis: {
+              status,
+              summary,
+              classification: resp.classification ?? undefined,
+              ambiguityTypes: resp.ambiguity_types ?? [],
+              interpretations: (resp.interpretations ?? []).map((it) => ({
+                label: String(it.label ?? ""),
+                description: String(it.description ?? ""),
+              })),
+              missingInfo: resp.missing_required_info ?? [],
+              confidenceScore: resp.confidence_assessment?.confidence_score ?? undefined,
+            },
+            candidates: status === "NEEDS_CLARIFICATION" ? (resp.candidate_options ?? []) : [],
+            resolvedAction:
+              status === "RESOLVED" &&
+              resp.resolved_intent &&
+              ["prepare_material_dispatch", "record_send_instruction"].includes(resp.resolved_intent.action)
+                ? {
+                    action: resp.resolved_intent.action,
+                    resolvedInstruction: resp.resolved_intent.resolved_instruction,
+                    parameters: resp.resolved_intent.parameters ?? {},
+                  }
+                : null,
             card: null,
           });
         } catch (err) {
@@ -273,6 +318,40 @@ function HomePage() {
         const msgs: ChatMsg[] = loaded.length
           ? [...loaded]
           : [{ id: nextId(), role: "assistant", text: WELCOME, card: null, analysis: null }];
+        // Reattach persisted selectable candidate options onto latest assistant clarification turn
+        if (conv.status === "NEEDS_CLARIFICATION" && detail.candidate_options && detail.candidate_options.length > 0) {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const msg = msgs[i];
+            if (msg && msg.role === "assistant") {
+              msgs[i] = {
+                ...msg,
+                candidates: detail.candidate_options,
+                analysis: { status: conv.status, summary: msg.text },
+              };
+              break;
+            }
+          }
+        }
+        if (
+          conv.status === "RESOLVED" &&
+          detail.resolved_intent &&
+          ["prepare_material_dispatch", "record_send_instruction"].includes(detail.resolved_intent.action)
+        ) {
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            const msg = msgs[i];
+            if (msg && msg.role === "assistant") {
+              msgs[i] = {
+                ...msg,
+                resolvedAction: {
+                  action: detail.resolved_intent.action,
+                  resolvedInstruction: detail.resolved_intent.resolved_instruction,
+                  parameters: detail.resolved_intent.parameters ?? {},
+                },
+              };
+              break;
+            }
+          }
+        }
         // Re-render the persisted draft card so it survives refreshes.
         if (persistedDraft && typeof persistedDraft === "object" && "body" in persistedDraft) {
           msgs.push({
@@ -370,6 +449,8 @@ function HomePage() {
   }, [convDialog, activeConv, settings.apiBaseUrl, loadHistory, convStore, newChat]);
 
   const navItems = [
+    { to: "/analysis", label: "Intent Workbench", icon: Sparkles },
+    { to: "/evaluation", label: "Evaluation & Benchmarks", icon: BarChart3 },
     { to: "/inventory", label: "Inventory", icon: Package },
     { to: "/warehouse", label: "Warehouse", icon: Warehouse },
     { to: "/orders", label: "Orders", icon: Truck },
@@ -461,7 +542,9 @@ function HomePage() {
 
         <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
           <div className="mx-auto max-w-3xl space-y-5">
-            {messages.map((m) => (
+            {messages.map((m, msgIdx) => {
+              const isLatestMsg = msgIdx === messages.length - 1;
+              return (
               <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] ${m.role === "user" ? "order-2" : ""}`}>
                   {m.role === "assistant" && (
@@ -478,15 +561,113 @@ function HomePage() {
                       {m.text}
                     </div>
                   )}
-                  {m.card && !m.pending && <div className="mt-3"><OpsCardView card={m.card} /></div>}
-                  {m.analysis && m.analysis.status === "NEEDS_CLARIFICATION" && (
-                    <Link to="/clarification" className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:underline">
-                      Open clarification flow <ChevronRight size={12} />
-                    </Link>
+                  {m.candidates && m.candidates.length > 0 && !m.pending && isLatestMsg && (
+                    <div className="mt-2.5 grid gap-2 sm:grid-cols-2" role="group" aria-label="Select candidate option">
+                      {m.candidates.map((cand) => (
+                        <button
+                          key={cand.id}
+                          type="button"
+                          onClick={() => void send(cand.reply_text)}
+                          className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left shadow-sm transition-colors hover:border-cyan-500 hover:bg-cyan-50/60"
+                        >
+                          <div className="text-xs font-semibold text-slate-900">{cand.label}</div>
+                          {cand.subtitle && (
+                            <div className="mt-0.5 text-[11px] text-slate-500">{cand.subtitle}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
+                  {m.analysis &&
+                    m.analysis.status === "NEEDS_CLARIFICATION" &&
+                    (!m.candidates || m.candidates.length === 0) &&
+                    ((m.analysis.interpretations && m.analysis.interpretations.length > 0) ||
+                      (m.analysis.ambiguityTypes && m.analysis.ambiguityTypes.length > 0 && m.analysis.interpretations && m.analysis.interpretations.length > 0)) &&
+                    !m.pending &&
+                    isLatestMsg && (
+                      <div className="mt-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs shadow-sm space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-slate-900">Intent &amp; Ambiguity Analysis</span>
+                            {m.analysis.classification && (
+                              <span className="rounded bg-cyan-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-700">
+                                {m.analysis.classification.replace(/_/g, " ")}
+                              </span>
+                            )}
+                            {(m.analysis.ambiguityTypes ?? []).map((t) => (
+                              <span key={t} className="rounded bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                          {typeof m.analysis.confidenceScore === "number" && (
+                            <span className="text-[11px] font-mono text-slate-500">
+                              Confidence: {Math.round(m.analysis.confidenceScore * 100)}%
+                            </span>
+                          )}
+                        </div>
+                        {m.analysis.interpretations && m.analysis.interpretations.length > 0 && (
+                          <div className="grid gap-1.5 sm:grid-cols-2">
+                            {m.analysis.interpretations.slice(0, 4).map((interp, idx) => (
+                              <button
+                                key={`${interp.label}-${idx}`}
+                                type="button"
+                                onClick={() => void send(`Use interpretation: ${interp.label}`)}
+                                className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition-colors hover:border-cyan-500 hover:bg-cyan-50"
+                              >
+                                <div className="font-semibold text-slate-900">{interp.label}</div>
+                                <div className="mt-0.5 text-[11px] text-slate-500">{interp.description}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {m.analysis.missingInfo && m.analysis.missingInfo.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <span className="text-[11px] text-slate-500">Missing:</span>
+                            {m.analysis.missingInfo.map((mi) => (
+                              <span key={mi} className="rounded bg-slate-100 px-2 py-0.5 text-[10px] text-slate-700">
+                                {mi}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  {m.resolvedAction && !m.pending && (
+                    <div className="mt-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-slate-700 shadow-sm">
+                      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-900">Action Summary</span>
+                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                          {String(m.resolvedAction.parameters["execution_status"] ?? "PENDING CONFIRMATION").replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <div className="grid gap-1 sm:grid-cols-2">
+                        {Boolean(m.resolvedAction.parameters["material_name"]) && (
+                          <div><span className="text-slate-500">Material:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["material_name"])} ({String(m.resolvedAction.parameters["sku"] ?? "")})</span></div>
+                        )}
+                        {Boolean(m.resolvedAction.parameters["document"]) && (
+                          <div><span className="text-slate-500">Item:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["document"])}</span></div>
+                        )}
+                        {Boolean(m.resolvedAction.parameters["quantity"]) && (
+                          <div><span className="text-slate-500">Quantity:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["quantity"])} {String(m.resolvedAction.parameters["unit"] ?? "")}</span></div>
+                        )}
+                        {Boolean(m.resolvedAction.parameters["recipient"]) && (
+                          <div><span className="text-slate-500">Recipient:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["recipient"])}</span></div>
+                        )}
+                        {Boolean(m.resolvedAction.parameters["destination"]) && (
+                          <div><span className="text-slate-500">Destination:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["destination"])}</span></div>
+                        )}
+                        {Boolean(m.resolvedAction.parameters["time_window"]) && (
+                          <div><span className="text-slate-500">Timing:</span> <span className="font-medium text-slate-900">{String(m.resolvedAction.parameters["time_window"])}</span></div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {m.card && !m.pending && <div className="mt-3"><OpsCardView card={m.card} onSelectOption={(txt) => void send(txt)} /></div>}
                 </div>
               </div>
-            ))}
+            );
+            })}
             <div ref={bottomRef} />
           </div>
         </div>

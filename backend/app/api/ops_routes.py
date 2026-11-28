@@ -185,7 +185,7 @@ def _first_match(text: str, patterns: list[str]) -> bool:
 # --- Communication / messaging intents (draft-only; no provider connected) ---
 
 _COMMS_PATTERNS = [
-    "message", "remind", "notify", "notification", "email",
+    "message", "remind", "notify", "notification", "email", "emial",
     "text ", "payment reminder", "deadline reminder", "follow up", "follow-up",
 ]
 _FOLLOWUP_PATTERNS = [
@@ -277,6 +277,50 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     last = (context or {}).get("last_message_draft") if context else None
     ql = question.lower()
 
+    # Follow-up recipient selection after a message clarification prompt
+    # (e.g. "Email Charan's classmate that I will be absent tomorrow." -> click "Ravi Shetty")
+    if last and last.get("requires_clarification") and not last.get("body"):
+        picked_name: Optional[str] = None
+        reply_clean = question.strip().rstrip(".!")
+        rl = reply_clean.lower()
+        for cand in (last.get("candidate_options") or []):
+            lbl = str(cand.get("label", "")).lower()
+            rt = str(cand.get("reply_text", "")).lower()
+            fn = str((cand.get("metadata") or {}).get("full_name", "")).lower()
+            if rl in {lbl, rt, fn} or (len(rl) >= 4 and (rl in lbl or rl in fn)):
+                picked_name = str((cand.get("metadata") or {}).get("full_name") or cand.get("reply_text") or reply_clean)
+                break
+        if not picked_name:
+            try:
+                from app.core.identity_memory import search_people
+
+                p_hits, _ = search_people(settings.database_path, reply_clean)
+                if len(p_hits) == 1:
+                    picked_name = p_hits[0].full_name
+            except Exception:
+                pass
+        if not picked_name and 1 <= len(reply_clean.split()) <= 4:
+            picked_name = reply_clean
+        if picked_name:
+            body_txt = str(last.get("raw_body") or question)
+            draft = _build_draft(picked_name, body_txt)
+            if last.get("subject"):
+                draft["subject"] = last["subject"]
+            draft["raw_body"] = body_txt
+            draft["recipient_confirmed"] = True
+            draft["relationship"] = last.get("relationship")
+            draft["action"] = last.get("action") or "email"
+            _annotate_email(draft, picked_name, settings)
+            return {
+                "card_type": "message_draft",
+                "title": f"Message Draft — {picked_name}",
+                "summary": (
+                    f"Message drafted for {picked_name}. It has NOT been sent — no messaging provider is connected. "
+                    "You can ask me to make it more polite or adjust it."
+                ),
+                "data": draft,
+            }
+
     # Follow-up edit of an existing draft (tone, send request, pronoun message, name change)
     if last and (_first_match(ql, _FOLLOWUP_PATTERNS) or ql.startswith("change ") or _first_match(ql, ["tell ", "say ", "change his name", "change her name", "change the name", "his name", "her name"])):
         # "Change his/her name to X" — update recipient only
@@ -361,11 +405,28 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
                 intent.message = (last or {}).get("raw_body") or intent.message or question
 
     if intent.requires_clarification and not intent.recipient_name:
+        cands_out: list[dict[str, Any]] = []
+        try:
+            from app.core.identity_memory import resolve_recipient_reference
+
+            res_c = resolve_recipient_reference(settings.database_path, question, [])
+            if res_c.candidates:
+                cands_out = [p.to_candidate_dict() for p in res_c.candidates]
+        except Exception:
+            pass
         return {
             "card_type": "message_draft",
             "title": "Clarification needed",
             "summary": intent.clarification_question or "Who should I send this to?",
-            "data": {"requires_clarification": True, "delivery_status": "NONE"},
+            "data": {
+                "requires_clarification": True,
+                "delivery_status": "NONE",
+                "candidate_options": cands_out,
+                "raw_body": intent.message or question,
+                "subject": intent.subject,
+                "relationship": intent.relationship,
+                "action": intent.action,
+            },
         }
 
     recipient = intent.recipient_name or "there"
@@ -377,6 +438,15 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     draft["recipient_confirmed"] = not intent.requires_recipient_confirmation
     draft["relationship"] = intent.relationship
     draft["action"] = intent.action
+    if intent.requires_recipient_confirmation and len(str(recipient).split()) == 1:
+        try:
+            from app.core.identity_memory import search_people
+
+            matches, _ = search_people(settings.database_path, str(recipient))
+            if matches:
+                draft["candidate_options"] = [p.to_candidate_dict() for p in matches]
+        except Exception:
+            pass
     _annotate_email(draft, str(recipient), settings)
 
     if intent.requires_recipient_confirmation:
@@ -401,6 +471,56 @@ def _message_draft_card(question: str, context: Optional[dict[str, Any]], settin
     }
 
 
+def _materials_card_response(db: str, question: str) -> Optional[dict[str, Any]]:
+    """Build a material_detail or inventory_summary card when the query matches catalog items."""
+    from app.core.dispatch_resolver import _match_material_query
+    from app.inventory.catalog_search import search_materials
+
+    matched = search_materials(db, question, limit=3)
+    m_exact, _, _ = _match_material_query(db, question)
+    if m_exact is not None:
+        matched = [m_exact]
+    if not matched:
+        return None
+    if len(matched) == 1:
+        m = matched[0]
+        locs = ", ".join(m.warehouse_locations) or "Warehouse"
+        status_note = (
+            f" Stock is 0 {m.unit} — already finished and no stock is available. Please choose another item."
+            if m.physical_available <= 0
+            else ""
+        )
+        return {
+            "card_type": "material_detail",
+            "title": f"{m.name} ({m.sku})",
+            "summary": (
+                f"{m.name} ({m.sku}): on hand {m.on_hand:g} {m.unit}, "
+                f"allocated/reserved {m.allocated:g}, incoming {m.incoming:g}, "
+                f"physical available {m.physical_available:g} {m.unit}, "
+                f"net/projected available {m.net_availability:g} {m.unit} ({m.stock_status}) at {locs}.{status_note}"
+            ),
+            "data": m.model_dump(),
+        }
+    return {
+        "card_type": "inventory_summary",
+        "title": f"Matching Inventory ({len(matched)} products)",
+        "summary": ", ".join(
+            (
+                f"{m.name} ({m.sku}): 0 {m.unit} avail (OUT_OF_STOCK — finished, choose another item)"
+                if m.physical_available <= 0
+                else f"{m.name} ({m.sku}): {m.physical_available:g} {m.unit} avail ({m.stock_status})"
+            )
+            for m in matched
+        ),
+        "data": {
+            "total_materials": len(matched),
+            "low_stock_count": sum(1 for m in matched if m.stock_status == "LOW_STOCK"),
+            "out_of_stock_count": sum(1 for m in matched if m.stock_status == "OUT_OF_STOCK"),
+            "materials": [m.model_dump() for m in matched],
+        },
+    }
+
+
 def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]:
     """
     Deterministically route a business question to the right verified dataset
@@ -409,13 +529,53 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
     q = body.question.lower()
     db = settings.database_path
 
+    # Dispatch requests, document/report send commands, and pure identity/relationship
+    # statements must route to the unified NLU slot workflow ("help" fallthrough),
+    # never into unrelated order-risk or draft follow-up handlers.
+    import re as _re_ops
+    from app.core.dispatch_resolver import is_material_dispatch_instruction
+    from app.core.identity_memory import looks_like_pure_fact_statement
+    from app.core.local_analyzer import _looks_like_random_or_nonsense
+
+    has_active_draft = bool((body.context or {}).get("last_message_draft"))
+
+    if (
+        (not has_active_draft and _looks_like_random_or_nonsense(body.question))
+        or is_material_dispatch_instruction(body.question)
+        or looks_like_pure_fact_statement(body.question)
+        or _re_ops.match(
+            r"^\s*(?:please\s+)?(?:send|email|e-?mail|forward|share|deliver)\s+.*\b(report|document|file|pdf|notes|spreadsheet)\b",
+            body.question,
+            _re_ops.IGNORECASE,
+        )
+        or _re_ops.search(
+            r"\b(?:convert|percent|per\s*cent|%)\b",
+            body.question,
+            _re_ops.IGNORECASE,
+        )
+        or (
+            (_re_ops.search(r"\bcancel\b", q) and _re_ops.search(r"\b(?:ship|confirm)\b", q))
+            or (_re_ops.search(r"\bapprove\b", q) and _re_ops.search(r"\breject\b", q))
+            or (_re_ops.search(r"\bincrease\b", q) and _re_ops.search(r"\bdecrease\b", q))
+            or (_re_ops.search(r"\bdelete\b", q) and _re_ops.search(r"\bkeep\b", q))
+        )
+    ):
+        return {
+            "card_type": "help",
+            "title": "Routing to conversation workflow",
+            "summary": "Handling clarification and resolution inline.",
+            "data": {},
+        }
+
     # Follow-up edits to a previous message draft take priority — e.g.
     # "make it more polite" or "send it tomorrow" contain no comms keywords.
     last_draft = (body.context or {}).get("last_message_draft") if body.context else None
     q_start = q.lstrip()
+    _start_followups = ("tell ", "say ", "him ", "her ", "them ", "message him", "message her", "email him", "email her", "change ")
     if last_draft and (
-        _first_match(q, _FOLLOWUP_PATTERNS)
-        or _first_match(q_start, ["tell ", "say ", "him ", "her ", "them ", "message him", "message her", "email him", "email her", "change "])
+        (isinstance(last_draft, dict) and last_draft.get("requires_clarification") and not last_draft.get("body") and len(body.question.split()) <= 6)
+        or _first_match(q, _FOLLOWUP_PATTERNS)
+        or any(q_start.startswith(p) for p in _start_followups)
         or _first_match(q, ["change his name", "change her name", "change the name", "his name", "her name"])
     ):
         return _message_draft_card(body.question, body.context, settings)
@@ -423,7 +583,7 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
     # Communication / messaging intents first — they may contain business words
     # like "stock" or "payment" that must not trigger inventory routing.
     if _first_match(q, _COMMS_PATTERNS) or (
-        "send" in q and _first_match(q, ["reminder", "message", "note", "email", "text"])
+        "send" in q and _first_match(q, ["reminder", "message", "note", "email", "emial", "text"])
     ):
         return _message_draft_card(body.question, body.context, settings)
 
@@ -462,15 +622,43 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
             }
         return {"card_type": "suppliers", "title": "Supplier Performance", "data": {"suppliers": get_supplier_performance(db)}}
 
-    # Warehouse / storage questions
-    if _first_match(q, ["warehouse", "storage", "space", "zone", "rack", "shelf", "bin", "where is", "where are", "located", "stored"]):
-        # material-specific location?
+    # Warehouse / storage questions (require warehouse context or explicit product lookup)
+    _wh_context = _first_match(q, ["warehouse", "storage", "rack", "shelf", "bin", "zone"]) or (
+        _first_match(q, ["where is", "where are", "located", "stored", "space"])
+        and (
+            _first_match(q, ["product", "products", "material", "materials", "inventory", "stock", "mat-", "sku-", "remaining", "capacity"])
+            or bool(__import__("app.inventory.catalog_search", fromlist=["search_materials"]).search_materials(db, body.question, limit=1))
+        )
+    )
+    if _wh_context:
+        from app.inventory.catalog_search import search_materials
+
         material_ref = None
         for tok in q.replace("?", " ").replace(".", " ").split():
             t = tok.strip(",")
             if t.upper().startswith("MAT-") or t.upper().startswith("SKU-"):
                 material_ref = t.upper()
                 break
+        if not material_ref:
+            found = search_materials(db, body.question, limit=3)
+            if len(found) == 1:
+                material_ref = found[0].id
+            elif len(found) > 1:
+                all_bins: list[dict[str, Any]] = []
+                for item in found:
+                    loc = get_material_location(db, item.id)
+                    if loc and loc.get("locations"):
+                        all_bins.extend(loc["locations"])
+                if all_bins:
+                    return {
+                        "card_type": "warehouse",
+                        "title": f"Storage Locations ({len(found)} matching products)",
+                        "summary": "; ".join(
+                            f"{b['material_name']} ({b['material_sku']}): {b['zone_code']}/{b['rack_code']}/{b['shelf_code']} ({b['stored_qty']:g} {b['material_unit']})"
+                            for b in all_bins
+                        ),
+                        "data": {"locations": all_bins, "overview": get_warehouse_overview(db)},
+                    }
         if material_ref:
             loc = get_material_location(db, material_ref)
             if loc:
@@ -478,7 +666,7 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
                     "card_type": "material_location",
                     "title": f"Storage Location — {loc['material']['name']}",
                     "summary": (
-                        f"{loc['material']['name']} is stored in {len(loc['locations'])} bin(s): "
+                        f"{loc['material']['name']} ({loc['material']['sku']}) is stored in {len(loc['locations'])} bin(s): "
                         + ", ".join(
                             f"{b['zone_code']} / {b['rack_code']} / {b['shelf_code']} ({b['stored_qty']:g} {loc['material']['unit']} stored)"
                             for b in loc["locations"]
@@ -504,7 +692,7 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
             return {"card_type": "order_detail", "title": f"Order {order_ref} — Fulfilment Timeline", "data": tl}
 
     # Purchase orders / procurement (checked before generic "order" keywords)
-    if _first_match(q, ["purchase order", " po ", "procurement", "reorder", "order materials", "missing materials", "create", "generate"]):
+    if _first_match(q, ["purchase order", "purchase-order", " po ", "procurement", "reorder", "order materials", "missing materials", "pending po", "po proposal"]):
         proposals = list_proposals(db)
         shortages = detect_shortages(db)
         return {
@@ -515,7 +703,7 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
         }
 
     # Expected / incoming deliveries
-    if _first_match(q, ["expected", "incoming delivery", "deliveries", "arrival", "shipment arriving"]):
+    if _first_match(q, ["incoming delivery", "deliveries", "shipment arriving", "expected today", "expected delivery"]):
         with get_connection(db) as conn:
             rows = conn.execute(
                 """
@@ -549,7 +737,7 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
             "data": shortages,
         }
 
-    if _first_match(q, ["order", "delay", "deliver", "dispatch", "shipment", "crd", "late", "pending order"]):
+    if _first_match(q, ["open order", "open orders", "order risk", "orders risk", "delivery risk", "orders might be delayed", "might be delayed", "delayed order", "crd", "pending order", "late order"]):
         risks = []
         from app.inventory.order_risk_engine import evaluate_order_risks
         risks = evaluate_order_risks(db)
@@ -562,9 +750,27 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
             "data": {"orders": [r.model_dump() for r in risks]},
         }
 
-    # Stock / inventory
-    if _first_match(q, ["stock", "inventory", "available", "quantity", "how much", "overview"]):
+    # Stock / inventory (require explicit stock/inventory domain words or a real catalog item, never "stock market")
+    _stock_domain = (
+        ("stock" in q and "stock market" not in q and "stock price" not in q)
+        or "inventory" in q
+        or (
+            _first_match(q, ["available", "availability", "quantity", "how much", "how many", "overview", "do we have"])
+            and (
+                _first_match(q, ["material", "materials", "product", "products", "warehouse", "mat-", "sku-"])
+                or _materials_card_response(db, body.question) is not None
+            )
+        )
+    )
+    if _stock_domain:
         from app.inventory.availability_calculator import get_inventory_overview
+
+        is_general = _first_match(q, ["how much stock do i have", "all stock", "overview", "all inventory", "entire inventory", "all products", "all materials"])
+        if not is_general and not any(tok in q for tok in ("overview", "summary")):
+            card = _materials_card_response(db, body.question)
+            if card is not None:
+                return card
+
         ov = get_inventory_overview(db)
         return {
             "card_type": "inventory_summary",
@@ -575,6 +781,15 @@ def _ops_query_impl(body: OpsQueryRequest, settings: Settings) -> dict[str, Any]
             ),
             "data": ov.model_dump(),
         }
+
+    # Short direct catalog name/SKU lookups ("Cold-Rolled Steel Sheet", "SKU-STL-01", "2-ton screw jack")
+    if len(body.question.split()) <= 6 and not _first_match(
+        q,
+        ["schedule", "reallocate", "deploy", "approve", "reject", "cancel", "delete", "send", "ship", "dispatch", "email", "message", "remind"],
+    ):
+        card = _materials_card_response(db, body.question)
+        if card is not None:
+            return card
 
     return {
         "card_type": "help",
@@ -652,7 +867,9 @@ def ops_query(body: OpsQueryRequest, settings: Settings = Depends(get_settings))
         db_ops.update_conversation_state(
             db, conv_id, status=str((conv or {}).get("status") or "RESOLVED"), turn_count=turn + 1
         )
-        if card.get("card_type") == "message_draft" and isinstance(card.get("data"), dict) and "body" in card["data"]:
+        if card.get("card_type") == "message_draft" and isinstance(card.get("data"), dict) and (
+            "body" in card["data"] or card["data"].get("requires_clarification")
+        ):
             db_ops.upsert_message_draft(db, conv_id, card["data"])
         elif card.get("card_type") != "message_draft":
             # Mirror client semantics: a non-draft card supersedes the active draft.

@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS materials (
     sku TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT 'General',
+    aliases_json TEXT NOT NULL DEFAULT '[]',
+    data_origin TEXT NOT NULL DEFAULT 'SEEDED_DEMO',
     unit TEXT NOT NULL,
     reorder_threshold REAL NOT NULL DEFAULT 0.0,
     preferred_supplier_id TEXT NULL,
@@ -237,5 +240,101 @@ def run_migrations(db_path: str) -> None:
             """
             INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
             VALUES (4, 'Structured card payloads on messages', datetime('now'));
+            """
+        )
+        # v5: material categories, common-name aliases, and data_origin columns.
+        mat_cols = {row[1] for row in conn.execute("PRAGMA table_info(materials)")}
+        if "category" not in mat_cols:
+            conn.execute("ALTER TABLE materials ADD COLUMN category TEXT NOT NULL DEFAULT 'General';")
+        if "aliases_json" not in mat_cols:
+            conn.execute("ALTER TABLE materials ADD COLUMN aliases_json TEXT NOT NULL DEFAULT '[]';")
+        if "data_origin" not in mat_cols:
+            conn.execute("ALTER TABLE materials ADD COLUMN data_origin TEXT NOT NULL DEFAULT 'SEEDED_DEMO';")
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (5, 'Material categories, aliases, and data origin metadata', datetime('now'));
+            """
+        )
+        # v6: persistent identity & relationship memory tables.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS people (
+                id TEXT PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                first_name TEXT NOT NULL,
+                aliases_json TEXT NOT NULL DEFAULT '[]',
+                nicknames_json TEXT NOT NULL DEFAULT '[]',
+                usernames_json TEXT NOT NULL DEFAULT '[]',
+                alternative_spellings_json TEXT NOT NULL DEFAULT '[]',
+                gender TEXT NOT NULL DEFAULT 'neutral',
+                city TEXT NULL,
+                location_detail TEXT NULL,
+                occupation TEXT NULL,
+                org_role TEXT NULL,
+                category TEXT NOT NULL DEFAULT 'personal',
+                organization TEXT NULL,
+                department TEXT NULL,
+                supplier_id TEXT NULL,
+                warehouse_id TEXT NULL,
+                email TEXT NULL,
+                phone TEXT NULL,
+                comm_preference TEXT NULL DEFAULT 'message',
+                data_origin TEXT NOT NULL DEFAULT 'SEEDED_DEMO',
+                notes TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
+                FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE SET NULL
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_people_unique_identity
+                ON people(lower(full_name), coalesce(lower(city), ''), lower(category));
+
+            CREATE INDEX IF NOT EXISTS idx_people_first_name
+                ON people(lower(first_name));
+
+            CREATE TABLE IF NOT EXISTS person_relationships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                person_id TEXT NOT NULL,
+                related_person_id TEXT NOT NULL,
+                relationship_type TEXT NOT NULL,
+                shared_context TEXT NULL,
+                data_origin TEXT NOT NULL DEFAULT 'SEEDED_DEMO',
+                created_at TEXT NOT NULL,
+                UNIQUE(person_id, related_person_id, relationship_type),
+                FOREIGN KEY (person_id) REFERENCES people(id) ON DELETE CASCADE,
+                FOREIGN KEY (related_person_id) REFERENCES people(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_rel_person
+                ON person_relationships(person_id, relationship_type);
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (6, 'Persistent identity and relationship memory graph', datetime('now'));
+            """
+        )
+        # v7: persistent per-conversation workflow slots and disambiguation candidates.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS conversation_context_state (
+                conversation_id TEXT PRIMARY KEY,
+                workflow_type TEXT NULL,
+                pending_slot TEXT NULL,
+                slots_json TEXT NOT NULL DEFAULT '{}',
+                candidate_options_json TEXT NOT NULL DEFAULT '[]',
+                resolved_entities_json TEXT NOT NULL DEFAULT '[]',
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, description, applied_at)
+            VALUES (7, 'Persistent conversation slot state and candidate selections', datetime('now'));
             """
         )

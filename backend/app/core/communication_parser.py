@@ -76,7 +76,7 @@ def _parse_deterministic(question: str, context: Optional[dict[str, Any]]) -> Co
     ql = q.lower()
     last = (context or {}).get("last_message_draft") if context else None
 
-    action = "email" if "email" in ql or "e-mail" in ql else ("reminder" if "remind" in ql else "message")
+    action = "email" if ("email" in ql or "emial" in ql or "e-mail" in ql) else ("reminder" if "remind" in ql else "message")
 
     # --- Recipient resolution ---
     recipient_name: Optional[str] = None
@@ -84,20 +84,55 @@ def _parse_deterministic(question: str, context: Optional[dict[str, Any]]) -> Co
     recipient_desc: Optional[str] = None
     pronoun_ref = False
 
-    # Possessive forms: "Charan's classmate" → recipient is the classmate, NOT Charan
+    # Possessive forms: "Charan's classmate", "charan's classmate", "Rahul's classmate", "Ravi's friend"
     import re
-    poss = re.search(r"([A-Z][a-zA-Z]+)(?:'s|’s)\s+([a-zA-Z ]+?)(?:\s+(?:that|to|about|regarding)|,|$)", q)
-    if poss:
+    _rel_union = "|".join(sorted(_RELATIONSHIPS, key=len, reverse=True))
+    poss = re.search(
+        rf"\b([a-zA-Z]+)(?:'s|’s)\s+({_rel_union})(?:\s+(?:that|to|about|regarding)|,|$)",
+        q,
+        flags=re.IGNORECASE,
+    )
+    if poss and poss.group(1).lower() not in _NAME_STOPWORDS:
         owner, rel = poss.group(1), poss.group(2).strip()
         relationship = rel if rel.lower() in _RELATIONSHIPS or rel.lower().split()[0] in _RELATIONSHIPS else rel.lower()
         recipient_desc = f"{owner}'s {relationship}"
+        try:
+            from app.config import get_settings
+            from app.core.identity_memory import resolve_recipient_reference
+
+            res = resolve_recipient_reference(get_settings().database_path, q, [])
+            if res.status == "resolved" and res.resolved_person is not None:
+                recipient_name = res.resolved_person.full_name
+                body_resolved = _extract_body_deterministic(q)
+                return CommunicationIntent(
+                    action=action,
+                    recipient_name=recipient_name,
+                    relationship=relationship,
+                    recipient_description=recipient_desc,
+                    message=body_resolved,
+                    subject=_make_subject(body_resolved, action),
+                    confidence=0.88,
+                    requires_recipient_confirmation=False,
+                    requires_clarification=False,
+                )
+            if res.status == "ambiguous" and res.candidates:
+                names = ", ".join(p.full_name for p in res.candidates[:3])
+                return CommunicationIntent(
+                    action=action, recipient_name=None, relationship=relationship,
+                    recipient_description=recipient_desc, message=_extract_body_deterministic(q),
+                    subject=None, confidence=0.4, requires_recipient_confirmation=True,
+                    requires_clarification=True,
+                    clarification_question=f"Which {relationship} of {owner} should I contact ({names})?",
+                )
+        except Exception:
+            pass
         # unnamed possessive recipient → needs clarification
         return CommunicationIntent(
             action=action, recipient_name=None, relationship=relationship,
             recipient_description=recipient_desc, message=_extract_body_deterministic(q),
             subject=None, confidence=0.4, requires_recipient_confirmation=True,
             requires_clarification=True,
-            clarification_question=f"Who is {owner}'s {relationship}? I need a name or identifier before drafting.",
+            clarification_question=f"Who is {owner}'s {relationship}? I need a name before drafting.",
         )
 
     # "my <relationship> <Name>" or "<relationship> <Name>"
@@ -126,10 +161,10 @@ def _parse_deterministic(question: str, context: Optional[dict[str, Any]]) -> Co
                 clarification_question="Who should I send this to?",
             )
 
-    # "Email Charan that..." / "Message Ravi that..." / "Tell Ravi that..."
+    # "Email Charan that..." / "Emial Ravi Kumar that..." / "Message Ravi that..."
     if recipient_name is None:
         m = re.search(
-            r"(?:[Ee]mail|[Mm]essage|[Mm]sg|[Rr]emind|[Nn]otify|[Tt]ell|[Tt]ext|[Ss]end)\s+(?:to\s+|my\s+|the\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b",
+            r"(?:[Ee]-?m(?:ail|ial)|[Mm]essage|[Mm]sg|[Rr]emind|[Nn]otify|[Tt]ell|[Tt]ext|[Ss]end)\s+(?:to\s+|my\s+|the\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b",
             q,
         )
         if m:
@@ -228,7 +263,34 @@ def parse_communication(
     context: Optional[dict[str, Any]] = None,
     use_gemini: bool = True,
 ) -> CommunicationIntent:
-    """Parse a communication request: Gemini structured first, deterministic fallback."""
+    """Parse a communication request: deterministic DB identity/relationships are authoritative;
+    Gemini may assist with spelling/message extraction when identity is open.
+    """
+    det = _parse_deterministic(question, context)
+
+    # Check deterministic identity & relationship DB resolution authoritatively
+    id_res = None
+    try:
+        from app.config import get_settings
+        from app.core.identity_memory import resolve_recipient_reference
+
+        id_res = resolve_recipient_reference(get_settings().database_path, question, [])
+    except Exception:
+        id_res = None
+
+    if id_res is not None:
+        if id_res.status == "resolved" and id_res.resolved_person is not None:
+            det.recipient_name = id_res.resolved_person.full_name
+            det.requires_clarification = False
+            det.requires_recipient_confirmation = False
+        elif id_res.status == "ambiguous" and id_res.candidates and det.recipient_description and "'s " in det.recipient_description:
+            det.recipient_name = None
+            det.requires_clarification = True
+            det.requires_recipient_confirmation = True
+            names = ", ".join(p.full_name for p in id_res.candidates[:3])
+            det.clarification_question = id_res.question or f"Which person do you mean ({names})?"
+            return det
+
     if use_gemini:
         try:
             from app.services.gemini_service import call_gemini_structured
@@ -242,23 +304,30 @@ def parse_communication(
                     temperature=0.1,
                 )
                 if result is not None:
-                    # deterministic safety net: never trust 'there'/stopword recipients
-                    bad = {"there", "this", "that", "class", "friend", "tomorrow", "message", "email"}
-                    if result.recipient_name and result.recipient_name.strip().lower() in bad:
-                        result.recipient_name = None
-                        result.requires_clarification = True
-                        result.clarification_question = result.clarification_question or "Who should I send this to?"
+                    # Re-apply deterministic DB recipient resolution so Gemini never overrides
+                    # known database relationships or drops lone-name disambiguation.
+                    if id_res is not None and id_res.status == "resolved" and id_res.resolved_person is not None:
+                        result.recipient_name = id_res.resolved_person.full_name
+                        result.requires_clarification = False
+                        result.requires_recipient_confirmation = False
+                        result.clarification_question = None
+                        result.relationship = result.relationship or id_res.used_relationship or det.relationship
+                    else:
+                        bad = {"there", "this", "that", "class", "friend", "tomorrow", "message", "email"}
+                        if result.recipient_name and result.recipient_name.strip().lower() in bad:
+                            result.recipient_name = None
+                            result.requires_clarification = True
+                            result.clarification_question = result.clarification_question or "Who should I send this to?"
+                        if result.recipient_name and len(result.recipient_name.split()) == 1:
+                            result.requires_recipient_confirmation = True
                     if not result.message:
-                        result.message = _extract_body_deterministic(question)
+                        result.message = det.message or _extract_body_deterministic(question)
                     if result.requires_clarification and not result.clarification_question:
                         result.clarification_question = "Who should I send this to?"
-                    # deterministic rule: a lone first name always needs confirmation
-                    if result.recipient_name and len(result.recipient_name.split()) == 1:
-                        result.requires_recipient_confirmation = True
                     return result
         except Exception:
             pass
-    return _parse_deterministic(question, context)
+    return det
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +339,7 @@ def parse_communication(
 # ---------------------------------------------------------------------------
 
 _COMMS_STRONG = re.compile(
-    r"\b(e-?mail|message|msg|remind|notify|text|tell|forward)\b", re.IGNORECASE
+    r"\b(e-?mail|emial|message|msg|remind|notify|text|tell|forward)\b", re.IGNORECASE
 )
 _COMMS_SEND = re.compile(
     r"\b(send|share)\b[^.]*\b(reminder|message|email|e-mail|note|text|invoice|payment)\b",

@@ -46,8 +46,8 @@ function OrdersPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-900">Orders & Delivery</h1>
-      <p className="mb-6 text-sm text-slate-500">Live fulfilment status, delay risk and evidence-based timelines.</p>
+      <h1 className="text-2xl font-bold text-white">Orders & Delivery</h1>
+      <p className="mb-6 text-sm text-slate-300">Live fulfilment status, delay risk and evidence-based timelines.</p>
       {error && <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>}
 
       <div className="grid gap-6 lg:grid-cols-3">

@@ -21,6 +21,7 @@ Analyze the user's instruction below. Your task is to:
 STRICT RULES:
 - Never ask questions when the instruction is sufficiently clear.
 - Never fabricate missing user information.
+- Never classify random keystrokes, gibberish, greetings, off-topic chatter, or vague nonsense as "clear" or map them to "check_inventory". For unrecognized or random input, set classification="incomplete", needs_clarification=true, interpretations=[] and ask specifically what the user wants to do.
 - Never invent inventory quantities, names, or dates.
 - If the user asks a clear inventory/supply-chain query about current shortages, open orders, delivery/CRD risks, PO approvals, stock availability, or ResolveX material IDs (e.g., MAT-CHIP, MAT-STEEL, MAT-COPPER, MAT-BOLT), classify it as "clear" with an inventory-related action (such as "check_inventory", "check_shortages", "check_order_risks", or "check_purchase_orders") so the inventory engine can supply exact database data.
 - Communication requests (email/message/remind/notify/text someone) are "clear" when a recipient name or relationship AND message content are identifiable; classify them "ambiguous" only when the recipient cannot be confidently identified (e.g., possessive 'X's colleague', relationship-only 'my manager', or a lone unqualified first name). Draft-only: never claim a message was sent.

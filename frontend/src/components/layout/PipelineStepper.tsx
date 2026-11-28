@@ -15,7 +15,7 @@ const STEPS = [
   { to: "/analysis", label: "1. Analysis", icon: SearchCheck },
   { to: "/visualization", label: "2. Visualization & Graph", icon: Eye },
   { to: "/interpretations", label: "3. What-If Simulator", icon: GitBranch },
-  { to: "/clarification", label: "4. Clarification & Verify", icon: MessageSquareMore },
+  { to: "/", label: "4. Unified Chat", icon: MessageSquareMore },
   { to: "/resolution", label: "5. Final Resolution", icon: CheckCircle2 },
 ] as const;
 

@@ -128,10 +128,11 @@ def test_resolved_inventory_intent_routes_to_ps2(tmp_path: Path) -> None:
     ):
         resp = start_conversation(db_path, "Check stock and shortages for MAT-CHIP.")
 
+    from app.inventory.seed import EXPANDED_CATALOG
     assert resp.status == "RESOLVED"
     assert resp.inventory_insight is not None
     assert resp.inventory_insight["domain"] == "inventory"
-    assert resp.inventory_insight["inventory_overview"]["total_materials"] == 4
+    assert resp.inventory_insight["inventory_overview"]["total_materials"] == len(EXPANDED_CATALOG)
 
 
 def test_briefing_respects_x_user_role_header(tmp_path: Path, monkeypatch) -> None:

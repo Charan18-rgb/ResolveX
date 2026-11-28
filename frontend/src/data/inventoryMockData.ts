@@ -329,7 +329,7 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     detail: "Essential intent fields require clarification before finalizing the active prompt.",
     category: "Language",
     severity: "info",
-    route: "/clarification",
+    route: "/",
     read: false,
   },
 ];

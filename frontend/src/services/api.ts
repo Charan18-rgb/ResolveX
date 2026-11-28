@@ -65,6 +65,7 @@ export const API_ENDPOINTS = {
   conversations: "/api/conversations",
   inventoryOverview: "/api/inventory/overview",
   inventoryMaterials: "/api/inventory/materials",
+  inventorySearch: "/api/inventory/search",
   inventoryShortages: "/api/inventory/shortages",
   inventoryEvents: "/api/inventory/events",
   inventoryAllocations: "/api/inventory/allocations",
@@ -641,6 +642,41 @@ export const resolveXService = {
 
   async getInventoryMaterials(baseUrl?: string): Promise<BackendMaterialOverview[]> {
     return requestFastApi<BackendMaterialOverview[]>(baseUrl, API_ENDPOINTS.inventoryMaterials);
+  },
+
+  async updateMaterialStock(
+    materialId: string,
+    payload: {
+      on_hand?: number;
+      incoming?: number;
+      reorder_threshold?: number;
+      reason?: string;
+      actor?: string;
+    },
+    baseUrl?: string,
+  ): Promise<BackendMaterialOverview> {
+    return requestFastApi<BackendMaterialOverview>(
+      baseUrl,
+      `${API_ENDPOINTS.inventoryMaterials}/${encodeURIComponent(materialId)}/stock`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  async searchInventoryMaterials(
+    q: string,
+    category?: string,
+    baseUrl?: string,
+  ): Promise<BackendMaterialOverview[]> {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    if (category && category !== "All") params.set("category", category);
+    return requestFastApi<BackendMaterialOverview[]>(
+      baseUrl,
+      `${API_ENDPOINTS.inventorySearch}?${params.toString()}`,
+    );
   },
 
   async getInventoryShortages(

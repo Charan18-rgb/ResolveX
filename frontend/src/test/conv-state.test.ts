@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createConvStateStore, NEW_CONV_KEY } from "@/lib/convState";
 
@@ -46,11 +48,20 @@ describe("conversation UI state isolation", () => {
   it("state does not leak when switching keys", () => {
     const s = createConvStateStore();
     s.set("conv-a", { pendingClarify: { conversationId: "conv-a" } });
-    // Simulate switching to conv-b: reads for conv-b must be empty.
     const bState = s.get("conv-b");
     expect(bState.pendingClarify).toBeNull();
     expect(bState.draft).toBeNull();
-    // And conv-a's state survives the round trip.
     expect(s.get("conv-a").pendingClarify?.conversationId).toBe("conv-a");
+  });
+
+  it("removes legacy clarification redirects from main chatbot and assistant context", () => {
+    const indexSrc = fs.readFileSync(path.resolve(__dirname, "../routes/index.tsx"), "utf-8");
+    const ctxSrc = fs.readFileSync(path.resolve(__dirname, "../context/ResolveXContext.tsx"), "utf-8");
+    const stepperSrc = fs.readFileSync(path.resolve(__dirname, "../components/layout/PipelineStepper.tsx"), "utf-8");
+    expect(indexSrc).not.toContain('to="/clarification"');
+    expect(indexSrc).not.toContain("I need a bit more detail");
+    expect(indexSrc).toContain("cand.reply_text");
+    expect(ctxSrc).not.toContain('"/clarification"');
+    expect(stepperSrc).not.toContain('"/clarification"');
   });
 });

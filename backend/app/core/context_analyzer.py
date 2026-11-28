@@ -105,8 +105,21 @@ def extract_entities_from_text(
         _push("object", "File / Identifier", m)
     for m in _REPORT_OBJECT_RE.findall(cleaned):
         phrase = re.sub(r"\s+", " ", m).strip()
-        if len(phrase) >= 4 and phrase.lower() not in {"the report", "that report", "the file", "that file", "the sheet", "the document"}:
-            _push("object", "Artifact / Object", phrase)
+        stripped = re.sub(
+            r"^(?:(?:please|send|email|forward|share|prepare|draft|check|update|review|export)\s+)+",
+            "",
+            phrase,
+            flags=re.IGNORECASE,
+        ).strip()
+        stripped_no_art = re.sub(r"^(?:the|that|this|a|an)\s+", "", stripped, flags=re.IGNORECASE).strip()
+        if (
+            len(stripped_no_art) >= 4
+            and stripped_no_art.lower()
+            not in {"report", "document", "file", "sheet", "spreadsheet", "proposal", "invoice", "deployment", "allocation"}
+            and stripped.lower()
+            not in {"the report", "that report", "the file", "that file", "the sheet", "the document"}
+        ):
+            _push("object", "Artifact / Object", stripped)
 
     # 3. Dates / Timing
     for m in _DATE_RE.findall(cleaned):
@@ -147,11 +160,26 @@ def resolve_session_references(
     object_cands = _dedup_entities("object")
     date_cands = _dedup_entities("date")
 
-    # 1. Personal pronouns ('him', 'her')
+    # 1. Personal pronouns ('him', 'her') with gender compatibility checking
     if re.search(r"\b(him|her)\b", lower):
         token = "him" if re.search(r"\bhim\b", lower) else "her"
-        if len(person_cands) == 1:
-            match = person_cands[0]
+        expected_gender = "male" if token == "him" else "female"
+        compatible_cands: list[ContextMemoryEntity] = []
+        try:
+            from app.config import get_settings
+            from app.core.identity_memory import search_people
+
+            db_for_gender = get_settings().database_path
+            for pc in person_cands:
+                hits, _ = search_people(db_for_gender, pc.value)
+                if len(hits) == 1 and hits[0].gender in ("male", "female") and hits[0].gender != expected_gender:
+                    continue
+                compatible_cands.append(pc)
+        except Exception:
+            compatible_cands = list(person_cands)
+
+        if len(compatible_cands) == 1:
+            match = compatible_cands[0]
             resolved.append(
                 ReferenceResolutionItem(
                     reference_token=token,
@@ -164,8 +192,8 @@ def resolve_session_references(
                     explanation=f"Resolved “{token}” to “{match.value}” from Turn {match.source_turn}.",
                 )
             )
-        elif len(person_cands) > 1:
-            names = [c.value for c in person_cands]
+        elif len(compatible_cands) > 1:
+            names = [c.value for c in compatible_cands]
             conflicts.append(
                 ReferenceResolutionItem(
                     reference_token=token,
@@ -185,7 +213,7 @@ def resolve_session_references(
                     status="unclear",
                     resolved_value=None,
                     candidates=[],
-                    explanation=f"No person exists in current session memory to bind “{token}”.",
+                    explanation=f"No compatible person exists in current session memory to bind “{token}”.",
                     clarification_question=f"Who does “{token}” refer to in this request?",
                 )
             )

@@ -18,6 +18,7 @@ from app.api.purchase_order_routes import procurement_router
 from app.api.routes import router
 from app.config import get_settings
 from app.database.connection import init_db
+from app.database.identity_seed import ensure_identity_catalog
 from app.inventory.allocation_engine import recalculate_allocations
 from app.inventory.order_risk_engine import evaluate_order_risks
 from app.inventory.seed import seed_demo_data
@@ -33,6 +34,7 @@ async def lifespan(_app: FastAPI):
     init_db(settings.database_path)
     seed_demo_data(settings.database_path)
     seed_ops_data(settings.database_path)
+    ensure_identity_catalog(settings.database_path)
     recalculate_allocations(settings.database_path)
     evaluate_order_risks(settings.database_path)
     sync_inventory_alerts(settings.database_path)

@@ -43,16 +43,15 @@ const PIPELINE_ROUTES = new Set([
   "/analysis",
   "/visualization",
   "/interpretations",
-  "/clarification",
   "/resolution",
 ]);
 
 const PS6_NAV = [
+  { to: "/", label: "Unified Chat", icon: MessageSquareMore },
   { to: "/workspace", label: "Workspace", icon: LayoutDashboard },
   { to: "/analysis", label: "Analysis", icon: SearchCheck },
   { to: "/visualization", label: "Context Graph", icon: Eye },
   { to: "/interpretations", label: "What-If Simulator", icon: GitBranch },
-  { to: "/clarification", label: "Clarification", icon: MessageSquareMore },
   { to: "/resolution", label: "Resolution", icon: CheckCircle2 },
 ] as const;
 

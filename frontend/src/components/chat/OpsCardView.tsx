@@ -49,44 +49,83 @@ function SuppliersTable({ suppliers }: { suppliers: SupplierPerf[] }) {
   );
 }
 
-function WarehouseCard({ data }: { data: WarehouseOverview }) {
+function WarehouseCard({ data }: { data: WarehouseOverview | { overview?: WarehouseOverview; locations?: StorageBin[] } }) {
+  const raw = data as {
+    overview?: WarehouseOverview;
+    locations?: Array<StorageBin & { material_name?: string; material_sku?: string; material_unit?: string }>;
+    totals?: WarehouseOverview["totals"];
+    zones?: WarehouseOverview["zones"];
+  };
+  const locations = Array.isArray(raw?.locations) ? raw.locations : [];
+  const ov = raw?.overview ?? (raw?.totals ? (raw as WarehouseOverview) : undefined);
+  const totals = ov?.totals;
+  const zones = Array.isArray(ov?.zones) ? ov.zones : [];
   return (
-    <div>
-      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          ["Storage used", `${num(data.totals.stored_units)} / ${num(data.totals.capacity_units)} units`],
-          ["Free space", `${num(data.totals.capacity_units) - num(data.totals.stored_units)} units`],
-          ["Incoming", `${num(data.totals.incoming_units)} units`],
-          ["Utilization", pct(data.totals.utilization_pct)],
-        ].map(([k, v]) => (
-          <div key={k} className="rounded-lg bg-slate-50 p-3">
-            <div className="text-xs text-slate-500">{k}</div>
-            <div className="text-lg font-semibold text-slate-900">{v}</div>
-          </div>
-        ))}
-      </div>
-      <table className="w-full">
-        <thead className="border-b border-slate-200">
-          <tr><th className={th}>Zone</th><th className={th}>Bins</th><th className={th}>Used</th><th className={th}>Free</th><th className={th}>Incoming</th><th className={th}>Utilization</th></tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {data.zones.map((z) => (
-            <tr key={z.zone_code}>
-              <td className={`${td} font-medium`}>{z.zone_code}</td>
-              <td className={td}>{z.bin_count}</td>
-              <td className={td}>{num(z.stored_units)}</td>
-              <td className={td}>{num(z.free_units)}</td>
-              <td className={td}>{num(z.incoming_units)}</td>
-              <td className={td}>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-24 rounded bg-slate-200"><div className="h-2 rounded bg-cyan-600" style={{ width: `${Math.min(100, z.utilization_pct)}%` }} /></div>
-                  {pct(z.utilization_pct)}
-                </div>
-              </td>
-            </tr>
+    <div className="space-y-4">
+      {locations.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="border-b border-slate-200">
+              <tr><th className={th}>Product</th><th className={th}>Zone</th><th className={th}>Rack</th><th className={th}>Shelf</th><th className={th}>Stored</th><th className={th}>Incoming</th><th className={th}>Status</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {locations.map((loc) => (
+                <tr key={loc.id}>
+                  <td className={td}>
+                    <div className="font-medium text-slate-900">{String(loc.material_name ?? loc.material_id ?? "—")}</div>
+                    {loc.material_sku && <div className="text-xs text-slate-400">{loc.material_sku}</div>}
+                  </td>
+                  <td className={`${td} font-medium`}>{loc.zone_code}</td>
+                  <td className={td}>{loc.rack_code}</td>
+                  <td className={td}>{loc.shelf_code}</td>
+                  <td className={td}>{num(loc.stored_qty)} / {num(loc.capacity_units)}</td>
+                  <td className={td}>{num(loc.incoming_qty)}</td>
+                  <td className={td}>{loc.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {totals && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ["Storage used", `${num(totals.stored_units)} / ${num(totals.capacity_units)} units`],
+            ["Free space", `${num(totals.capacity_units) - num(totals.stored_units)} units`],
+            ["Incoming", `${num(totals.incoming_units)} units`],
+            ["Utilization", pct(totals.utilization_pct)],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-lg bg-slate-50 p-3">
+              <div className="text-xs text-slate-500">{k}</div>
+              <div className="text-lg font-semibold text-slate-900">{v}</div>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
+      {zones.length > 0 && (
+        <table className="w-full">
+          <thead className="border-b border-slate-200">
+            <tr><th className={th}>Zone</th><th className={th}>Bins</th><th className={th}>Used</th><th className={th}>Free</th><th className={th}>Incoming</th><th className={th}>Utilization</th></tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {zones.map((z) => (
+              <tr key={z.zone_code}>
+                <td className={`${td} font-medium`}>{z.zone_code}</td>
+                <td className={td}>{z.bin_count}</td>
+                <td className={td}>{num(z.stored_units)}</td>
+                <td className={td}>{num(z.free_units)}</td>
+                <td className={td}>{num(z.incoming_units)}</td>
+                <td className={td}>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-24 rounded bg-slate-200"><div className="h-2 rounded bg-cyan-600" style={{ width: `${Math.min(100, z.utilization_pct)}%` }} /></div>
+                    {pct(z.utilization_pct)}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
@@ -98,7 +137,7 @@ function MaterialLocationCard({ data }: { data: { material: any; balance: any | 
     <div>
       <div className="mb-3 text-sm text-slate-600">
         <span className="font-medium text-slate-900">{String(m.name ?? m.id)}</span>
-        {" — "}on hand {num(bal.on_hand_qty ?? bal.on_hand)} · allocated {num(bal.allocated_qty ?? bal.allocated)} · available {num(bal.available_qty ?? bal.net_available)}
+        {" — "}on hand {num(bal.on_hand_qty ?? bal.on_hand)} · allocated {num(bal.allocated_qty ?? bal.allocated)} · available {num(bal.physical_available ?? bal.available_qty ?? bal.net_availability ?? bal.net_available)}
       </div>
       <table className="w-full">
         <thead className="border-b border-slate-200">
@@ -204,9 +243,9 @@ function PurchaseOrdersCard({ data }: { data: { shortages: unknown[]; proposals:
   const pending = data.proposals.filter((p) => p.status === "PENDING_APPROVAL").length;
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Material shortages</div><div className="text-lg font-semibold">{data.shortages.length}</div></div>
-        <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Proposals awaiting approval</div><div className="text-lg font-semibold">{pending}</div></div>
+      <div className="grid grid-cols-2 gap-3 text-slate-900">
+        <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Material shortages</div><div className="text-lg font-semibold text-slate-900">{data.shortages.length}</div></div>
+        <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">Proposals awaiting approval</div><div className="text-lg font-semibold text-slate-900">{pending}</div></div>
       </div>
       {data.proposals.length > 0 && (
         <table className="w-full">
@@ -245,10 +284,19 @@ function DeliveriesCard({ data }: { data: any }) {
   );
 }
 
-function MessageDraftCard({ data, summary }: { data: any; summary?: string | undefined }) {
+function MessageDraftCard({
+  data,
+  summary,
+  onSelectOption,
+}: {
+  data: any;
+  summary?: string | undefined;
+  onSelectOption?: ((replyText: string) => void) | undefined;
+}) {
   const draft = data ?? {};
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const [sendError, setSendError] = useState<string | null>(null);
+  const candidates = Array.isArray(draft.candidate_options) ? (draft.candidate_options as any[]) : [];
 
   const canSend = Boolean(draft.can_email_send) && typeof draft.recipient === "string" && draft.recipient.includes("@");
   const send = async () => {
@@ -269,6 +317,29 @@ function MessageDraftCard({ data, summary }: { data: any; summary?: string | und
     }
   };
 
+  if (draft.requires_clarification && !draft.body) {
+    return (
+      <div className="space-y-2">
+        {summary && <p className="text-sm text-slate-700">{summary}</p>}
+        {candidates.length > 0 && onSelectOption && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {candidates.map((c, idx) => (
+              <button
+                key={String(c.id ?? idx)}
+                type="button"
+                onClick={() => onSelectOption(String(c.reply_text ?? c.label ?? ""))}
+                className="cursor-pointer rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left hover:border-cyan-500 hover:bg-cyan-50"
+              >
+                <div className="text-xs font-semibold text-slate-900">{String(c.label ?? "")}</div>
+                {c.subtitle && <div className="text-[11px] text-slate-500">{String(c.subtitle)}</div>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
@@ -282,6 +353,20 @@ function MessageDraftCard({ data, summary }: { data: any; summary?: string | und
         <div className="text-xs text-slate-500">Subject: <span className="font-medium text-slate-800">{String(draft.subject ?? "—")}</span></div>
         <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-slate-800">{String(draft.body ?? "")}</pre>
       </div>
+      {draft.recipient_confirmed === false && candidates.length > 0 && onSelectOption && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {candidates.map((c, idx) => (
+            <button
+              key={String(c.id ?? idx)}
+              type="button"
+              onClick={() => onSelectOption(`Change recipient name to ${String(c.metadata?.full_name ?? c.reply_text ?? c.label)}`)}
+              className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:border-cyan-500 hover:text-cyan-800"
+            >
+              Use {String(c.label ?? c.reply_text)}
+            </button>
+          ))}
+        </div>
+      )}
       {canSend && sendState !== "sent" && (
         <button
           onClick={() => void send()}
@@ -303,31 +388,44 @@ function InventorySummaryCard({ data }: { data: any }) {
   const low = num(data.low_stock_count); const oos = num(data.out_of_stock_count); const total = num(data.total_materials);
   return (
     <div>
-      <div className="mb-3 grid grid-cols-3 gap-3">
+      <div className="mb-3 grid grid-cols-3 gap-3 text-slate-900">
         {[["Products tracked", total], ["Low stock", low], ["Out of stock", oos]].map(([k, v]) => (
-          <div key={String(k)} className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{k}</div><div className="text-lg font-semibold">{v}</div></div>
+          <div key={String(k)} className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-500">{k}</div><div className="text-lg font-semibold text-slate-900">{v}</div></div>
         ))}
       </div>
       {items.length > 0 && (
-        <table className="w-full">
-          <thead className="border-b border-slate-200"><tr><th className={th}>Product</th><th className={th}>On hand</th><th className={th}>Reserved</th><th className={th}>Available</th></tr></thead>
-          <tbody className="divide-y divide-slate-100">
-            {items.slice(0, 10).map((it, i) => (
-              <tr key={i}>
-                <td className={td}><div className="font-medium">{String(it.name ?? it.material_name ?? it.id ?? "—")}</div><div className="text-xs text-slate-400">{String(it.sku ?? it.material_id ?? "")}</div></td>
-                <td className={td}>{num(it.on_hand_qty ?? it.on_hand)}</td>
-                <td className={td}>{num(it.allocated_qty ?? it.reserved ?? it.allocated)}</td>
-                <td className={td}>{num(it.available_qty ?? it.net_available ?? it.available)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div>
+          <div className="max-h-96 overflow-x-auto overflow-y-auto">
+            <table className="w-full text-slate-800">
+              <thead className="sticky top-0 border-b border-slate-200 bg-white"><tr><th className={th}>Product</th><th className={th}>On hand</th><th className={th}>Reserved</th><th className={th}>Available</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((it, i) => (
+                  <tr key={i}>
+                    <td className={td}><div className="font-medium text-slate-900">{String(it.name ?? it.material_name ?? it.id ?? "—")}</div><div className="text-xs text-slate-400">{String(it.sku ?? it.material_id ?? "")}</div></td>
+                    <td className={td}>{num(it.on_hand_qty ?? it.on_hand)}</td>
+                    <td className={td}>{num(it.allocated_qty ?? it.reserved ?? it.allocated)}</td>
+                    <td className={td}>{num(it.physical_available ?? it.available_qty ?? it.net_availability ?? it.net_available ?? it.available)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+            Showing {items.length} catalog item{items.length === 1 ? "" : "s"}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-export function OpsCardView({ card }: { card: OpsCard }) {
+export function OpsCardView({
+  card,
+  onSelectOption,
+}: {
+  card: OpsCard;
+  onSelectOption?: ((replyText: string) => void) | undefined;
+}) {
   const body = useMemo(() => {
     const d = card.data;
     switch (card.card_type) {
@@ -342,10 +440,10 @@ export function OpsCardView({ card }: { card: OpsCard }) {
       case "order_detail": return <OrderDetailCard data={d as OrderTimeline} />;
       case "purchase_orders": return <PurchaseOrdersCard data={d as { shortages: unknown[]; proposals: any[] }} />;
       case "deliveries": return <DeliveriesCard data={d} />;
-      case "message_draft": return <MessageDraftCard data={d} summary={card.summary} />;
+      case "message_draft": return <MessageDraftCard data={d} summary={card.summary} onSelectOption={onSelectOption} />;
       default: return <p className="text-sm text-slate-500">{card.summary ?? "Ask about stock, storage, suppliers, orders, or purchase orders."}</p>;
     }
-  }, [card]);
+  }, [card, onSelectOption]);
 
   return (
     <div className={CARD_CLS}>
@@ -382,13 +480,48 @@ function ShortagesCard({ data }: { data: unknown }) {
 }
 
 function MaterialDetailCard({ data }: { data: unknown }) {
-  const d = data as any;
+  const d = (data ?? {}) as Record<string, unknown>;
+  if ("sku" in d || "on_hand" in d || "physical_available" in d) {
+    const unit = d["unit"] ? ` ${String(d["unit"])}` : "";
+    const onHand = num(d["on_hand_qty"] ?? d["on_hand"]);
+    const alloc = num(d["allocated_qty"] ?? d["reserved"] ?? d["allocated"]);
+    const avail = num(d["physical_available"] ?? d["available_qty"] ?? Math.max(0, onHand - alloc));
+    const incoming = num(d["incoming_qty"] ?? d["incoming"]);
+    const netAvail = num(d["net_availability"] ?? d["net_available"] ?? onHand + incoming - alloc);
+    const rawBins = d["warehouse_locations"];
+    const bins = Array.isArray(rawBins) && rawBins.length > 0 ? rawBins.join(", ") : "Warehouse";
+    const rows: [string, string][] = [
+      ["Material ID / SKU", `${String(d["id"] ?? "—")} · ${String(d["sku"] ?? "—")}`],
+      ["Category", String(d["category"] ?? "General")],
+      ["On Hand", `${onHand}${unit}`],
+      ["Allocated / Reserved", `${alloc}${unit}`],
+      ["Physically Available", `${avail}${unit}`],
+      ["Incoming Supply", `+${incoming}${unit}`],
+      ["Projected Net Availability", `${netAvail}${unit}`],
+      ["Reorder Threshold", `${num(d["reorder_threshold"])}${unit}`],
+      ["Status", String(d["stock_status"] ?? "—").replace(/_/g, " ")],
+      ["Supplier", String(d["supplier_name"] ?? "—")],
+      ["Warehouse Locations", bins],
+    ];
+    return (
+      <div className="space-y-1.5 text-sm text-slate-800">
+        {rows.map(([label, val]) => (
+          <div key={label} className="flex justify-between gap-4 border-b border-slate-100 py-1">
+            <span className="text-slate-500">{label}</span>
+            <span className={`font-medium text-right ${label === "Physically Available" && avail <= 0 ? "text-rose-600" : "text-slate-900"}`}>
+              {val}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="space-y-2 text-sm text-slate-700">
       {Object.entries(d).slice(0, 12).map(([k, v]) => (
         <div key={k} className="flex justify-between border-b border-slate-100 py-1">
           <span className="text-slate-500">{k.replace(/_/g, " ")}</span>
-          <span className="font-medium">{typeof v === "object" ? JSON.stringify(v) : String(v ?? "—")}</span>
+          <span className="font-medium text-slate-900">{typeof v === "object" ? JSON.stringify(v) : String(v ?? "—")}</span>
         </div>
       ))}
     </div>

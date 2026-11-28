@@ -46,7 +46,8 @@ def test_earliest_crd_allocation_and_risk_detection(tmp_path: Path) -> None:
 
     sync_inventory_alerts(db_path)
     overview = get_inventory_overview(db_path)
-    assert overview.total_materials == 4
+    from app.inventory.seed import EXPANDED_CATALOG
+    assert overview.total_materials == len(EXPANDED_CATALOG)
 
 
 def test_missing_lead_time_returns_unavailable_ship_date(tmp_path: Path) -> None:
@@ -75,7 +76,8 @@ def test_inventory_api_endpoints(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         with TestClient(create_app()) as client:
             ov = client.get("/api/inventory/overview")
             assert ov.status_code == 200
-            assert ov.json()["total_materials"] == 4
+            from app.inventory.seed import EXPANDED_CATALOG
+            assert ov.json()["total_materials"] == len(EXPANDED_CATALOG)
 
             risks = client.get("/api/orders/risks")
             assert risks.status_code == 200

@@ -47,8 +47,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/clarification" className="hover:text-cyan-300 transition-colors">
-                  Clarification Optimizer
+                <Link to="/" className="hover:text-cyan-300 transition-colors">
+                  Unified Chatbot
                 </Link>
               </li>
               <li>

@@ -31,10 +31,10 @@ interface PipelineDetail {
   title: string;
   icon: typeof SearchCheck;
   route:
+    | "/"
     | "/analysis"
     | "/visualization"
     | "/interpretations"
-    | "/clarification"
     | "/resolution"
     | "/inventory";
   inputExample: string;
@@ -71,9 +71,9 @@ const PIPELINE_DETAILS: PipelineDetail[] = [
   {
     id: "clarify",
     step: "Step 03",
-    title: "Smart Clarification Optimizer",
+    title: "Inline Conversational Clarification",
     icon: MessageSquareMore,
-    route: "/clarification",
+    route: "/",
     inputExample: "Ranked unresolved ambiguities above threshold",
     transformation:
       "Calculates information gain per ambiguity dimension, asks the single highest-priority question first in the selected language, recalculates remaining entropy after every answer, and stops early when essential intent is clear.",

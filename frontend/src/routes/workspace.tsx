@@ -89,9 +89,9 @@ function WorkspacePage() {
       icon: GitBranch,
     },
     {
-      title: "Clarification & Verification",
-      description: `${activeAnalysis.clarificationQuestions.length} priority-ranked prompts`,
-      to: "/clarification" as const,
+      title: "Unified Chatbot",
+      description: "Inline clarification, identity selection & operations",
+      to: "/" as const,
       icon: MessageSquareMore,
     },
     {
@@ -260,7 +260,7 @@ function WorkspacePage() {
 
           <ContextMemoryPanel
             title="Active Session Context Memory & Entity Tracker"
-            onResolveConflictClick={() => void navigate({ to: "/clarification" })}
+            onResolveConflictClick={() => void navigate({ to: "/" })}
           />
 
           <div className="space-y-3">

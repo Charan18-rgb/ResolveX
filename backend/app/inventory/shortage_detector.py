@@ -108,16 +108,16 @@ def sync_inventory_alerts(db_path: str) -> None:
                     last_ts = 0.0
                 if not existing["acknowledged"] or last_ts > renotify_after:
                     continue
-                conn.execute(
-                    """
-                    INSERT INTO inventory_alerts (alert_type, severity, entity_id, message, acknowledged, created_at)
-                    VALUES (?, ?, ?, ?, 0, ?);
-                    """,
-                    (
-                        alert_type,
-                        severity,
-                        item["material_id"],
-                        f"{item['material_name']} ({item['sku']}): net_avail={item['net_availability']} {item['unit']}, unmet_demand={item['unmet_order_demand']}.",
-                        now,
-                    ),
-                )
+            conn.execute(
+                """
+                INSERT INTO inventory_alerts (alert_type, severity, entity_id, message, acknowledged, created_at)
+                VALUES (?, ?, ?, ?, 0, ?);
+                """,
+                (
+                    alert_type,
+                    severity,
+                    item["material_id"],
+                    f"{item['material_name']} ({item['sku']}): net_avail={item['net_availability']} {item['unit']}, unmet_demand={item['unmet_order_demand']}.",
+                    now,
+                ),
+            )

@@ -1,15 +1,26 @@
 """
-Ambiguity detector — calls Gemini with structured output and falls back
-deterministically when the AI is unavailable, reporting fallback status
-honestly so downstream confidence intelligence never fabricates certainty.
+Ambiguity detector — calls Gemini with structured output, coordinates stateful
+material-dispatch and document/relationship/pronoun resolvers, normalizes questions,
+and falls back deterministically when AI is unavailable.
 """
 
 import logging
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
-from app.core.local_analyzer import clarify_locally, match_local, offline_fallback
+from app.core.clarification_engine import (
+    normalize_and_prioritize_questions,
+    sanitize_clarification_question,
+)
+from app.core.dispatch_resolver import resolve_material_dispatch_with_meta
+from app.core.local_analyzer import (
+    _looks_like_random_or_nonsense,
+    clarify_locally,
+    match_local,
+    offline_fallback,
+)
+from app.core.send_resolver import resolve_document_or_fact_turn
 from app.models.ai_schemas import GeminiAnalysisOutput
 from app.services import gemini_service
 from app.services.prompts import build_analysis_prompt, build_clarification_prompt
@@ -22,13 +33,7 @@ AnalysisSource = str  # "gemini" | "local" | "offline_fallback" | "system"
 def _reconcile_communication(
     instruction: str, result: GeminiAnalysisOutput
 ) -> GeminiAnalysisOutput:
-    """Deterministic validation layer for person-directed messaging.
-
-    The LLM interprets meaning; this check guarantees communication requests
-    are never misrouted to inventory/business intents and never silently assume
-    an unidentified recipient. Only overrides the model when the two readings
-    disagree on whether clarification is required.
-    """
+    """Deterministic validation layer for person-directed messaging."""
     try:
         from app.core.communication_parser import communication_analysis
 
@@ -39,13 +44,9 @@ def _reconcile_communication(
     if comm is None:
         return result
     if comm.needs_clarification == result.needs_clarification:
-        # Same posture: keep the richer model output, except adopt the more
-        # precise context_dependent label for pronoun/anaphoric follow-ups.
         if comm.classification == "context_dependent" and result.classification != "context_dependent":
             return comm
         return result
-    # Disagreement on whether clarification is needed: the deterministic
-    # communication reading is authoritative — it never assumes a recipient.
     return comm
 
 
@@ -59,14 +60,31 @@ _ANAPHORIC_OPENER = re.compile(
 def _relabel_anaphoric(
     instruction: str, result: GeminiAnalysisOutput
 ) -> GeminiAnalysisOutput:
-    """Short utterances that only make sense against prior context
-    ('Do the opposite.', 'Yes, do that one.') are context_dependent, not
-    ambiguous — there is a single missing referent, not competing readings."""
     if result.classification != "ambiguous" or result.needs_clarification is False:
         return result
     if len(instruction.strip().split()) <= 8 and _ANAPHORIC_OPENER.match(instruction):
         return result.model_copy(update={"classification": "context_dependent"})
     return result
+
+
+def _clean_analysis_questions(
+    instruction: str, result: GeminiAnalysisOutput
+) -> GeminiAnalysisOutput:
+    """Normalize and deduplicate clarification questions returned by any engine."""
+    if not result.clarification_questions:
+        return result
+    m_verb = re.search(r"\b(send|email|forward|share|ship|dispatch|transfer|draft)\b", instruction, re.IGNORECASE)
+    verb = m_verb.group(1).lower() if m_verb else None
+    sanitized = [
+        sanitize_clarification_question(q, action=verb)
+        for q in result.clarification_questions
+    ]
+    cleaned = [q for q in sanitized if q]
+    if not cleaned:
+        cleaned = result.clarification_questions[:1]
+    elif len(cleaned) > 1:
+        cleaned = normalize_and_prioritize_questions(cleaned, single_turn=True, action=verb)
+    return result.model_copy(update={"clarification_questions": cleaned})
 
 
 @dataclass
@@ -82,7 +100,6 @@ def _prefer_local(
     context_summary: str,
     multi_intent_authoritative: bool = True,
 ) -> GeminiAnalysisOutput | None:
-    """Closed-world tasks are answered without waiting on Gemini."""
     matched = match_local(
         instruction, context_summary, multi_intent_authoritative=multi_intent_authoritative
     )
@@ -91,49 +108,109 @@ def _prefer_local(
     return None
 
 
-def detect_ambiguity_with_status(
+def _extract_user_turns_from_summary(context_summary: str) -> list[str]:
+    turns: list[str] = []
+    for line in (context_summary or "").splitlines():
+        m = re.match(r"^\[Turn\s+\d+\]\s+User:\s*(.+)$", line)
+        if m:
+            turns.append(m.group(1).strip())
+    return turns
+
+
+def detect_ambiguity_full(
     db_path: str,
     instruction: str,
     conversation_id: str,
     context_summary: str,
-) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource]:
-    """
-    Classify and analyse the instruction.
-    Returns (analysis_output, is_ai_fallback, fallback_error_message, analysis_source).
-    """
+    session_entities: Optional[list[Any]] = None,
+) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource, Optional[dict[str, Any]]]:
+    """Full detection pipeline returning analysis + fallback flags + slot metadata."""
+    # 1. Material dispatch workflow
+    dispatch = resolve_material_dispatch_with_meta(
+        db_path,
+        instruction,
+        [instruction],
+        conversation_id=conversation_id,
+        session_entities=session_entities,
+    )
+    if dispatch is not None:
+        analysis_d, meta_d = dispatch
+        return analysis_d, False, None, "local", meta_d
+
+    # 2. Identity fact assertions & targeted pronoun/relationship/document send
+    doc_or_fact = resolve_document_or_fact_turn(
+        db_path,
+        conversation_id=conversation_id,
+        original_instruction=instruction,
+        new_response=None,
+        session_entities=session_entities or [],
+        force_fallback=False,
+    )
+    if doc_or_fact is not None:
+        analysis_s, meta_s = doc_or_fact
+        return analysis_s, False, None, "local", meta_s
+
+    # 2b. Random / gibberish / non-actionable input guard (never waste LLM calls or invent actions)
+    if _looks_like_random_or_nonsense(instruction):
+        return offline_fallback(instruction), False, None, "local", None
+
+    # 3. Gemini structured analysis
     prompt = build_analysis_prompt(instruction, context_summary)
     result, error = gemini_service.call_gemini_structured(
         prompt, GeminiAnalysisOutput
     )
 
     if error or result is None:
+        doc_fb = resolve_document_or_fact_turn(
+            db_path,
+            conversation_id=conversation_id,
+            original_instruction=instruction,
+            new_response=None,
+            session_entities=session_entities or [],
+            force_fallback=True,
+        )
+        if doc_fb is not None:
+            analysis_fb, meta_fb = doc_fb
+            return analysis_fb, True, error or "Deterministic local resolver active.", "local", meta_fb
+
         local = _prefer_local(instruction, context_summary)
         if local is not None:
-            return local, True, error or "Deterministic local resolver active.", "local"
+            return _clean_analysis_questions(instruction, local), True, error or "Deterministic local resolver active.", "local", None
         matched = match_local(instruction, context_summary)
         if matched is not None:
-            return matched.analysis, True, error or "Deterministic local resolver active.", "local"
+            return _clean_analysis_questions(instruction, matched.analysis), True, error or "Deterministic local resolver active.", "local", None
         return (
             offline_fallback(instruction),
             True,
             error or "Gemini returned empty analysis.",
             "offline_fallback",
+            None,
         )
 
-    # Enforce consistency: a "clear" classification must not ask for clarification
     if result.classification == "clear":
         result = result.model_copy(
             update={"needs_clarification": False, "clarification_questions": []}
         )
 
-    # A deterministic closed-world resolver (unit conversion, inventory lookup,
-    # communication draft) is authoritative: it beats a false clarification.
     local = _prefer_local(instruction, context_summary)
     if local is not None and result.needs_clarification and not local.needs_clarification:
         result = local
 
     reconciled = _reconcile_communication(instruction, result)
-    return _relabel_anaphoric(instruction, reconciled), False, None, "gemini"
+    relabeled = _relabel_anaphoric(instruction, reconciled)
+    return _clean_analysis_questions(instruction, relabeled), False, None, "gemini", None
+
+
+def detect_ambiguity_with_status(
+    db_path: str,
+    instruction: str,
+    conversation_id: str,
+    context_summary: str,
+) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource]:
+    a, b, c, d, _meta = detect_ambiguity_full(
+        db_path, instruction, conversation_id, context_summary
+    )
+    return a, b, c, d
 
 
 def detect_ambiguity(
@@ -142,34 +219,82 @@ def detect_ambiguity(
     conversation_id: str,
     context_summary: str,
 ) -> DetectionResult:
-    """
-    Call Gemini to classify and analyse the instruction.
-    Falls back to a safe deterministic response if Gemini is unavailable.
-    """
     result, _is_fallback, _err, source = detect_ambiguity_with_status(
         db_path, instruction, conversation_id, context_summary
     )
     return DetectionResult(result, source)
 
 
-def detect_ambiguity_with_clarification_status(
+def clarify_ambiguity_full(
     db_path: str,
     original_instruction: str,
     conversation_history: str,
     new_response: str,
     pending_questions: list[str],
-) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource]:
-    """
-    Re-analyze after a clarification turn and report whether fallback was used.
-    Returns (analysis_output, is_ai_fallback, fallback_error_message, analysis_source).
-    """
+    *,
+    conversation_id: Optional[str] = None,
+    session_entities: Optional[list[Any]] = None,
+) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource, Optional[dict[str, Any]]]:
+    """Re-analyze after a clarification turn preserving active slot workflows."""
+    prior_user_turns = _extract_user_turns_from_summary(conversation_history) or [original_instruction]
+
+    dispatch = resolve_material_dispatch_with_meta(
+        db_path,
+        original_instruction=original_instruction,
+        prior_user_turns=prior_user_turns,
+        latest_turn=new_response,
+        conversation_id=conversation_id,
+        session_entities=session_entities,
+    )
+    if dispatch is not None:
+        analysis_d, meta_d = dispatch
+        return analysis_d, False, None, "local", meta_d
+
+    doc_turn = resolve_document_or_fact_turn(
+        db_path,
+        conversation_id=conversation_id,
+        original_instruction=original_instruction,
+        new_response=new_response,
+        session_entities=session_entities or [],
+        force_fallback=False,
+    )
+    if doc_turn is not None:
+        analysis_s, meta_s = doc_turn
+        return analysis_s, False, None, "local", meta_s
+
+    from app.models.ai_schemas import InterpretationOutput, ResolvedIntentOutput
+
+    # Handle explicit clickable interpretation selection ("Use interpretation: Keep cancel", etc.)
+    interp_m = re.match(r"^\s*use\s+interpretation\s*:\s*(.+)$", new_response.strip(), re.IGNORECASE)
+    if interp_m:
+        chosen = interp_m.group(1).strip()
+        resolved_out = GeminiAnalysisOutput(
+            classification="context_dependent",
+            ambiguity_types=[],
+            needs_clarification=False,
+            reasoning=f"User selected explicit interpretation: '{chosen}'.",
+            interpretations=[
+                InterpretationOutput(label=chosen, description="Selected by user during clarification.")
+            ],
+            missing_required_info=[],
+            clarification_questions=[],
+            resolved_intent=ResolvedIntentOutput(
+                action="execute_resolved_interpretation",
+                parameters={"selected_interpretation": chosen, "original_instruction": original_instruction},
+                resolved_instruction=f"{original_instruction.strip()} — Interpretation: {chosen}",
+                direct_answer=f"Resolved: \"{chosen}\" applied to \"{original_instruction.strip()}\". Recorded safely — no external action was executed automatically.",
+            ),
+        )
+        return resolved_out, False, None, "local", None
+
+    user_only_context = "\n".join(prior_user_turns)
     local = _prefer_local(
         f"{original_instruction}\n{new_response}",
-        conversation_history,
+        user_only_context,
         multi_intent_authoritative=False,
     )
     if local is not None:
-        return local, False, None, "local"
+        return _clean_analysis_questions(original_instruction, local), False, None, "local", None
 
     prompt = build_clarification_prompt(
         original_instruction, conversation_history, new_response, pending_questions
@@ -179,35 +304,43 @@ def detect_ambiguity_with_clarification_status(
     )
 
     if error or result is None:
+        doc_fb = resolve_document_or_fact_turn(
+            db_path,
+            conversation_id=conversation_id,
+            original_instruction=original_instruction,
+            new_response=new_response,
+            session_entities=session_entities or [],
+            force_fallback=True,
+        )
+        if doc_fb is not None:
+            analysis_fb, meta_fb = doc_fb
+            return analysis_fb, True, error or "Deterministic local resolver active.", "local", meta_fb
+
         analysis, source = clarify_locally(
             original_instruction, new_response, pending_questions
         )
-        return analysis, True, error or "Gemini unavailable during clarification.", source
+        return _clean_analysis_questions(original_instruction, analysis), True, error or "Gemini unavailable during clarification.", source, None
 
     if result.classification == "clear":
         result = result.model_copy(
             update={"needs_clarification": False, "clarification_questions": []}
         )
 
-    return result, False, None, "gemini"
+    return _clean_analysis_questions(original_instruction, result), False, None, "gemini", None
 
 
-def detect_ambiguity_with_clarification(
+def detect_ambiguity_with_clarification_status(
     db_path: str,
     original_instruction: str,
     conversation_history: str,
     new_response: str,
     pending_questions: list[str],
-) -> DetectionResult:
-    """
-    Re-analyze after a clarification turn. Uses the full conversation history.
-    Falls back deterministically if Gemini is unavailable.
-    """
-    result, _is_fallback, _err, source = detect_ambiguity_with_clarification_status(
+) -> tuple[GeminiAnalysisOutput, bool, Optional[str], AnalysisSource]:
+    a, b, c, d, _meta = clarify_ambiguity_full(
         db_path,
         original_instruction,
         conversation_history,
         new_response,
         pending_questions,
     )
-    return DetectionResult(result, source)
+    return a, b, c, d

@@ -16,7 +16,8 @@ def test_ps2_migrations_and_seed_idempotency(tmp_path: Path) -> None:
     with get_connection(db_path) as conn:
         mat_count = conn.execute("SELECT COUNT(*) FROM materials;").fetchone()[0]
         ord_count = conn.execute("SELECT COUNT(*) FROM orders;").fetchone()[0]
-    assert mat_count == 4
+    from app.inventory.seed import EXPANDED_CATALOG
+    assert mat_count == len(EXPANDED_CATALOG)
     assert ord_count == 3
 
 

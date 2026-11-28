@@ -98,8 +98,8 @@ function IntegrationsPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Integrations</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold text-white">Integrations</h1>
+        <p className="mt-1 text-sm text-slate-300">
           Connect external systems so ResolveX can exchange inventory, orders and supplier data.
           Integrations are enabled one provider at a time through a controlled backend connector layer —
           credentials are stored server-side only and never in the browser.

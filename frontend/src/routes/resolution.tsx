@@ -80,7 +80,7 @@ function ResolutionPage() {
 
   const handleRouteToClarification = (questionId: string | null) => {
     focusClarificationQuestion(questionId);
-    void navigate({ to: "/clarification" });
+    void navigate({ to: "/" });
   };
 
   const displayTimeline =
@@ -242,9 +242,9 @@ function ResolutionPage() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => void navigate({ to: "/clarification" })}
+            onClick={() => void navigate({ to: "/" })}
           >
-            Answer Priority Questions
+            Continue in Unified Chat
           </Button>
         </div>
       )}

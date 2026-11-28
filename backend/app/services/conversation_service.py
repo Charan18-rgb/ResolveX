@@ -10,6 +10,8 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 from app.core.ambiguity_detector import (
+    clarify_ambiguity_full,
+    detect_ambiguity_full,
     detect_ambiguity_with_clarification_status,
     detect_ambiguity_with_status,
 )
@@ -20,6 +22,7 @@ from app.core.clarification_engine import (
 )
 from app.core.confidence_engine import evaluate_confidence_and_uncertainty
 from app.core.context_analyzer import build_context_summary, build_session_memory_bundle
+from app.core.identity_memory import get_slot_state
 from app.core.intent_resolver import validate_resolved_intent, build_fallback_resolved_intent
 from app.core.risk_engine import evaluate_intent_risk
 from app.core.task_router import classify_intent_domain, route_to_inventory
@@ -27,6 +30,7 @@ from app.database import operations as db_ops
 from app.models.ai_schemas import ResolvedIntentOutput
 from app.models.schemas import (
     AnalyzeResponse,
+    ClarificationCandidate,
     ConfidenceAssessment,
     ConfidenceHistoryPoint,
     InterpretationItem,
@@ -75,9 +79,13 @@ def start_conversation(
         db_path, conversation_id, focus_text=instruction
     )
 
-    # 3. Run Gemini analysis (with graceful fallback & provenance tracking)
-    analysis, is_ai_fallback, fallback_error, analysis_source = detect_ambiguity_with_status(
-        db_path, instruction, conversation_id, context_summary
+    # 3. Run analysis (with graceful fallback, slot persistence & provenance tracking)
+    analysis, is_ai_fallback, fallback_error, analysis_source, slot_meta = detect_ambiguity_full(
+        db_path,
+        instruction,
+        conversation_id,
+        context_summary,
+        session_entities=session_memory.entities,
     )
 
     # Coordinate reference conflict clarification if session memory detected conflicting/unclear refs
@@ -188,6 +196,13 @@ def start_conversation(
         for interp in enriched_interpretations
     ]
 
+    slot_meta = slot_meta or {}
+    candidate_models = [
+        ClarificationCandidate(**c)
+        for c in (slot_meta.get("candidate_options") or [])
+        if isinstance(c, dict)
+    ]
+
     return AnalyzeResponse(
         conversation_id=conversation_id,
         status=new_status,
@@ -204,6 +219,11 @@ def start_conversation(
         confidence_history=[history_point],
         context_memory=session_memory,
         risk_assessment=risk_assessment,
+        candidate_options=candidate_models,
+        resolved_slots=slot_meta.get("resolved_slots") or {},
+        pending_slot=slot_meta.get("pending_slot"),
+        workflow_type=slot_meta.get("workflow_type"),
+        resolved_identity=slot_meta.get("resolved_identity"),
         analysis_source=analysis_source,
     )
 
@@ -250,38 +270,42 @@ def continue_conversation(
         build_session_memory_bundle(db_path, conversation_id, focus_text=response)
     )
 
-    # 4. Force-resolve if max turns exceeded
-    is_ai_fallback = False
-    fallback_error: Optional[str] = None
-    if enforce_max_turns(turn_count, max_turns):
+    # 4. Run clarification analysis against prior user turns before checking turn limit
+    (
+        analysis,
+        is_ai_fallback,
+        fallback_error,
+        analysis_source,
+        slot_meta,
+    ) = clarify_ambiguity_full(
+        db_path,
+        original_instruction=conv["original_instruction"],
+        conversation_history=context_summary,
+        new_response=response,
+        pending_questions=asked_questions,
+        conversation_id=conversation_id,
+        session_entities=session_memory.entities,
+    )
+
+    # 5. Filter duplicate questions (preserving non-empty prompt if still unresolved)
+    if analysis.clarification_questions and slot_meta is None:
+        asked_normalized = normalize_questions(asked_questions)
+        filtered_qs = filter_new_questions(
+            analysis.clarification_questions, asked_normalized
+        )
+        if not filtered_qs and analysis.needs_clarification:
+            filtered_qs = analysis.clarification_questions[:1]
+        analysis = analysis.model_copy(
+            update={"clarification_questions": filtered_qs}
+        )
+
+    # Allow sequential single-question workflows up to 8 turns before forcing completion
+    effective_max_turns = max(max_turns, 8) if slot_meta is not None else max_turns
+    if analysis.needs_clarification and enforce_max_turns(turn_count, effective_max_turns):
         analysis = _build_force_resolution(conv["original_instruction"], context_summary)
         is_ai_fallback = True
         fallback_error = "Maximum clarification turns reached; forced deterministic completion."
         analysis_source = "system"
-    else:
-        (
-            analysis,
-            is_ai_fallback,
-            fallback_error,
-            analysis_source,
-        ) = detect_ambiguity_with_clarification_status(
-            db_path,
-            original_instruction=conv["original_instruction"],
-            conversation_history=context_summary,
-            new_response=response,
-            pending_questions=asked_questions,
-        )
-
-    # 5. Filter duplicate questions
-    if analysis.clarification_questions:
-        asked_normalized = normalize_questions(asked_questions)
-        analysis = analysis.model_copy(
-            update={
-                "clarification_questions": filter_new_questions(
-                    analysis.clarification_questions, asked_normalized
-                )
-            }
-        )
 
     # 6. Determine status and resolved intent
     new_status, resolved_intent_payload = _resolve_status_and_intent(
@@ -382,6 +406,13 @@ def continue_conversation(
         for interp in enriched_interpretations
     ]
 
+    slot_meta = slot_meta or {}
+    candidate_models = [
+        ClarificationCandidate(**c)
+        for c in (slot_meta.get("candidate_options") or [])
+        if isinstance(c, dict)
+    ]
+
     return AnalyzeResponse(
         conversation_id=conversation_id,
         status=new_status,
@@ -398,6 +429,11 @@ def continue_conversation(
         confidence_history=updated_history,
         context_memory=session_memory,
         risk_assessment=risk_assessment,
+        candidate_options=candidate_models,
+        resolved_slots=slot_meta.get("resolved_slots") or {},
+        pending_slot=slot_meta.get("pending_slot"),
+        workflow_type=slot_meta.get("workflow_type"),
+        resolved_identity=slot_meta.get("resolved_identity"),
         analysis_source=analysis_source,
     )
 
@@ -611,11 +647,15 @@ def _persist_assistant_message(
     turn_number: int,
 ) -> None:
     if status == "NEEDS_CLARIFICATION" and analysis.clarification_questions:
-        content = "I need clarification:\n" + "\n".join(
-            f"- {q}" for q in analysis.clarification_questions
-        )
+        if len(analysis.clarification_questions) == 1:
+            content = str(analysis.clarification_questions[0]).strip()
+        else:
+            content = "\n".join(analysis.clarification_questions)
     elif status == "RESOLVED" and analysis.resolved_intent:
-        content = f"Resolved: {analysis.resolved_intent.resolved_instruction}"
+        content = (
+            analysis.resolved_intent.direct_answer
+            or f"Resolved: {analysis.resolved_intent.resolved_instruction}"
+        )
     else:
         content = f"Analysis complete. Status: {status}."
 

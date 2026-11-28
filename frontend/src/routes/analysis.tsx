@@ -295,10 +295,10 @@ function AnalysisPage() {
                 Open What-If Simulator
               </Button>
               <Button
-                onClick={() => void navigate({ to: "/clarification" })}
+                onClick={() => void navigate({ to: "/" })}
                 iconRight={<ArrowRight className="h-4 w-4" />}
               >
-                Proceed to Clarification
+                Continue in Unified Chat
               </Button>
             </div>
           </Card>
@@ -310,7 +310,7 @@ function AnalysisPage() {
         title="Context Intelligence Graph — Semantic Entities & Dependencies"
         onClarifyNode={(questionId) => {
           focusClarificationQuestion(questionId);
-          void navigate({ to: "/clarification" });
+          void navigate({ to: "/" });
         }}
         onOpenInterpretations={() => void navigate({ to: "/interpretations" })}
       />

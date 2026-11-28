@@ -163,8 +163,10 @@ def list_conversations(
             db_path, conversation_id
         )
         from app.core.context_analyzer import build_session_memory_bundle
+        from app.core.identity_memory import get_slot_state
 
         session_memory, _, _, _ = build_session_memory_bundle(db_path, conversation_id)
+        slot_state = get_slot_state(db_path, conversation_id)
         from app.core.risk_engine import evaluate_intent_risk
 
         user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
@@ -188,6 +190,11 @@ def list_conversations(
             "confidence_history": confidence_history,
             "context_memory": session_memory.model_dump(),
             "risk_assessment": risk_assessment.model_dump(),
+            "workflow_type": slot_state.get("workflow_type"),
+            "pending_slot": slot_state.get("pending_slot"),
+            "resolved_slots": slot_state.get("slots") or {},
+            "candidate_options": slot_state.get("candidate_options") or [],
+            "resolved_entities": slot_state.get("resolved_entities") or [],
         }
 
     conversations, total = db_ops.list_conversations(db_path, limit=limit, offset=offset)

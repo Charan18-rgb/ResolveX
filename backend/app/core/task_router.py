@@ -11,46 +11,51 @@ from app.models.ai_schemas import ResolvedIntentOutput
 _INVENTORY_ACTION_KEYWORDS = {
     "inventory",
     "stock",
-    "material",
-    "supply",
-    "order",
     "shortage",
     "allocation",
     "purchase",
     "procurement",
     "reorder",
     "replenish",
-    "deliver",
     "warehouse",
     "fulfil",
     "fulfill",
     "bom",
     "bill_of_material",
-    "component",
     "availability",
     "crd",
-    "mat-chip",
-    "mat-steel",
-    "mat-copper",
-    "mat-bolt",
     "delivery_risk",
     "purchase_order",
     "proposal",
 }
 
+_EXCLUDED_NON_REPORT_ACTIONS = {
+    "draft_message",
+    "update_message_draft",
+    "record_send_instruction",
+    "unsupported_request",
+    "unit_conversion",
+    "calculate",
+    "prepare_material_dispatch",
+}
+
 
 def classify_intent_domain(resolved_intent: ResolvedIntentOutput) -> str:
     """
-    Return 'inventory' if the resolved intent relates to inventory/supply-chain,
+    Return 'inventory' if the resolved intent relates to inventory/supply-chain reporting,
     otherwise return 'general'.
     """
     action_lower = resolved_intent.action.lower()
+    if action_lower in _EXCLUDED_NON_REPORT_ACTIONS:
+        return "general"
     resolved_lower = resolved_intent.resolved_instruction.lower()
 
-    # Check action keywords
+    # Check action keywords (require explicit inventory/report keywords, not bare "material")
     for keyword in _INVENTORY_ACTION_KEYWORDS:
         if keyword in action_lower or keyword in resolved_lower:
             return "inventory"
+    if action_lower.startswith("check_") and ("material" in action_lower or "mat-" in resolved_lower or "sku-" in resolved_lower):
+        return "inventory"
 
     # Check parameter keys
     params = (
@@ -65,10 +70,9 @@ def classify_intent_domain(resolved_intent: ResolvedIntentOutput) -> str:
     return "general"
 
 
-_MATERIAL_IDS = ("MAT-CHIP", "MAT-STEEL", "MAT-COPPER", "MAT-BOLT")
+def _focus_materials(db_path: str, resolved_intent: ResolvedIntentOutput) -> list[str]:
+    from app.inventory.catalog_search import search_materials
 
-
-def _focus_materials(resolved_intent: ResolvedIntentOutput) -> list[str]:
     params = (
         resolved_intent.parameters_dict()
         if hasattr(resolved_intent, "parameters_dict")
@@ -80,18 +84,22 @@ def _focus_materials(resolved_intent: ResolvedIntentOutput) -> list[str]:
             resolved_intent.resolved_instruction,
             " ".join(str(value) for value in params.values()),
         ]
-    ).upper()
-    return [sku for sku in _MATERIAL_IDS if sku in blob]
+    ).strip()
+    if not blob:
+        return []
+    matches = search_materials(db_path, blob, limit=6)
+    return [m.id for m in matches]
 
 
 def _explain_inventory(
+    db_path: str,
     resolved_intent: ResolvedIntentOutput,
     overview: Any,
     shortages: list[dict[str, Any]],
     risks: list[Any],
 ) -> str:
     """Plain-language summary that only restates engine outputs."""
-    focus = _focus_materials(resolved_intent)
+    focus = _focus_materials(db_path, resolved_intent)
     action = resolved_intent.action.lower()
     lines: list[str] = []
 
@@ -160,7 +168,7 @@ def route_to_inventory(db_path: str, resolved_intent: ResolvedIntentOutput) -> d
     overview = get_inventory_overview(db_path)
     shortages = detect_shortages(db_path)
     risks = evaluate_order_risks(db_path)
-    focus = _focus_materials(resolved_intent)
+    focus = _focus_materials(db_path, resolved_intent)
     visible_shortages = shortages
     visible_risks = risks
     if focus:
@@ -182,6 +190,6 @@ def route_to_inventory(db_path: str, resolved_intent: ResolvedIntentOutput) -> d
         "inventory_overview": overview.model_dump(),
         "shortages": visible_shortages,
         "order_risks": [row.model_dump() for row in visible_risks],
-        "explanation": _explain_inventory(resolved_intent, overview, shortages, risks),
+        "explanation": _explain_inventory(db_path, resolved_intent, overview, shortages, risks),
         "note": "Data sourced deterministically from ResolveX inventory database.",
     }

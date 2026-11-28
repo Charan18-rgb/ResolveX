@@ -90,8 +90,9 @@ def _candidate_models() -> list[str]:
     candidates = [
         settings.gemini_model,
         settings.gemini_fallback_model,
-        "gemini-3.5-flash-lite",
+        "gemini-4-hydrogen",
         "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
     ]
     seen: list[str] = []
     for m in candidates:

@@ -74,7 +74,7 @@ function VisualizationPage() {
         graph={contextGraph}
         onClarifyNode={(questionId) => {
           focusClarificationQuestion(questionId);
-          void navigate({ to: "/clarification" });
+          void navigate({ to: "/" });
         }}
         onOpenInterpretations={() => void navigate({ to: "/interpretations" })}
       />
@@ -82,7 +82,7 @@ function VisualizationPage() {
       <ContextMemoryPanel
         compact
         title="Session Memory Synced with Context Graph"
-        onResolveConflictClick={() => void navigate({ to: "/clarification" })}
+        onResolveConflictClick={() => void navigate({ to: "/" })}
       />
 
       {/* Feature 9: Risk-Aware Intent Guardrails */}
@@ -91,7 +91,7 @@ function VisualizationPage() {
         assessment={riskAssessment}
         userConfirmed={userConfirmedHighRisk}
         onConfirmHighRisk={setUserConfirmedHighRisk}
-        onRequestClarification={() => void navigate({ to: "/clarification" })}
+        onRequestClarification={() => void navigate({ to: "/" })}
         title="Context Graph Impact &amp; Consequence Risk Layer"
       />
 

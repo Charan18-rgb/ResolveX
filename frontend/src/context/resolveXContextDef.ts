@@ -10,6 +10,7 @@ import type {
   BackendHealthStatus,
   BackendInventoryEvent,
   BackendInventoryOverviewResponse,
+  BackendMaterialOverview,
   BackendOrderRiskItem,
   BackendOrderRow,
   BackendPurchaseOrderProposal,
@@ -143,6 +144,16 @@ export interface ResolveXContextValue {
     payload: Record<string, unknown>;
     simulated?: boolean;
   }) => Promise<BackendEventIngestionResponse>;
+  updateMaterialStock: (
+    materialId: string,
+    payload: {
+      on_hand?: number;
+      incoming?: number;
+      reorder_threshold?: number;
+      reason?: string;
+      actor?: string;
+    },
+  ) => Promise<BackendMaterialOverview>;
   acknowledgeBackendAlert: (alertId: number) => Promise<void>;
   decidePoProposal: (
     proposalId: string,
